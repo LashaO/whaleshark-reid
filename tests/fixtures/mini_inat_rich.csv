@@ -1,0 +1,11 @@
+observation_id,photographer,license,date_captured,gps_lat_captured,gps_lon_captured,coco_url,height,width,conf,quality_grade
+100,alice,CC-BY,2025-11-19,25.66,-80.17,https://inat/100,1080,1920,0.94,research
+101,bob,CC-BY,2025-11-20,26.11,-80.12,https://inat/101,1080,1920,0.91,research
+102,cara,CC0,2025-11-21,25.90,-80.05,https://inat/102,720,1280,0.88,research
+103,dan,CC-BY,2025-11-22,24.90,-80.10,https://inat/103,1080,1920,0.77,casual
+104,eva,CC-BY,2025-11-23,25.50,-80.20,https://inat/104,1080,1920,0.93,research
+105,fran,CC0,2025-11-24,26.00,-80.00,https://inat/105,1080,1920,0.86,research
+106,gus,CC-BY,2025-11-25,25.70,-80.15,https://inat/106,1080,1920,0.80,research
+107,hal,CC-BY,2025-11-26,25.80,-80.18,https://inat/107,720,1280,0.79,casual
+108,iva,CC-BY,2025-11-27,25.95,-80.08,https://inat/108,1080,1920,0.90,research
+109,jon,CC-BY,2025-11-28,25.85,-80.12,https://inat/109,1080,1920,0.82,research
