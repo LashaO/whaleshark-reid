@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Editor
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Package state
+cache/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.parquet
+
+# OS
+.DS_Store
