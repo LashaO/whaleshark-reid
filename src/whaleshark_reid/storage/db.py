@@ -7,7 +7,9 @@ connection management + schema initialization only.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCHEMA_SQL_PATH = Path(__file__).parent / "schema.sql"
@@ -35,8 +37,6 @@ class Storage:
     def upsert_annotation(self, ann, run_id: str) -> None:
         """INSERT OR IGNORE an Annotation row. Does nothing if
         (source, observation_id, photo_index) already exists."""
-        from datetime import datetime, timezone
-
         x, y, w, h = ann.bbox
         self.conn.execute(
             """
@@ -106,3 +106,63 @@ class Storage:
         d.pop("ingested_run_id", None)
         d.pop("created_at", None)
         return Annotation(**d)
+
+    # ----- runs CRUD -----
+
+    def begin_run(
+        self,
+        run_id: str,
+        stage: str,
+        config: dict,
+        git_sha: str | None = None,
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO runs (run_id, stage, config_json, metrics_json, notes, git_sha,
+                              started_at, finished_at, status, error)
+            VALUES (?, ?, ?, NULL, NULL, ?, ?, NULL, 'running', NULL)
+            """,
+            (
+                run_id,
+                stage,
+                json.dumps(config, default=str),
+                git_sha,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+
+    def finish_run(
+        self,
+        run_id: str,
+        status: str,
+        metrics: dict,
+        error: str | None = None,
+        notes: str = "",
+    ) -> None:
+        if status not in ("ok", "failed"):
+            raise ValueError(f"Invalid terminal status: {status}")
+        self.conn.execute(
+            """
+            UPDATE runs SET
+                status = ?,
+                metrics_json = ?,
+                notes = ?,
+                finished_at = ?,
+                error = ?
+            WHERE run_id = ?
+            """,
+            (
+                status,
+                json.dumps(metrics, default=str),
+                notes,
+                datetime.now(timezone.utc).isoformat(),
+                error,
+                run_id,
+            ),
+        )
+
+    def get_run_status(self, run_id: str) -> str | None:
+        row = self.conn.execute(
+            "SELECT status FROM runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        return row["status"] if row else None
