@@ -47,22 +47,14 @@ class _UnionFind:
 
 def rebuild_individuals_cache(storage) -> RebuildResult:
     # Fetch all annotations (need full list so we can null out stale name_uuids)
-    all_uuids = [
-        row["annotation_uuid"]
-        for row in storage.conn.execute("SELECT annotation_uuid FROM annotations").fetchall()
-    ]
+    all_uuids = storage.list_annotation_uuids()
 
     # Active match decisions
-    rows = storage.conn.execute(
-        """
-        SELECT ann_a_uuid, ann_b_uuid FROM pair_decisions
-        WHERE decision = 'match' AND superseded_by IS NULL
-        """
-    ).fetchall()
+    match_pairs = storage.list_active_match_pairs()
 
     uf = _UnionFind(all_uuids)
-    for r in rows:
-        uf.union(r["ann_a_uuid"], r["ann_b_uuid"])
+    for a, b in match_pairs:
+        uf.union(a, b)
 
     components = uf.components()
     # Only components with >= 2 members are "individuals". Singletons get NULL.
@@ -80,10 +72,11 @@ def rebuild_individuals_cache(storage) -> RebuildResult:
             new_name_uuid_by_ann[members[0]] = None
 
     n_updated = 0
-    for ann_uuid in all_uuids:
-        desired = new_name_uuid_by_ann.get(ann_uuid)
-        storage.set_annotation_name_uuid(ann_uuid, desired)
-        n_updated += 1
+    with storage.transaction():
+        for ann_uuid in all_uuids:
+            desired = new_name_uuid_by_ann.get(ann_uuid)
+            storage.set_annotation_name_uuid(ann_uuid, desired)
+            n_updated += 1
 
     return RebuildResult(
         n_components=n_components,

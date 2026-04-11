@@ -112,10 +112,9 @@ def ingest_inat_csv(
 
         ann = Annotation(**ann_kwargs)
 
-        before = storage.count("annotations")
+        before_changes = storage.conn.total_changes
         storage.upsert_annotation(ann, run_id=run_id)
-        after = storage.count("annotations")
-        if after > before:
+        if storage.conn.total_changes > before_changes:
             n_ingested += 1
         else:
             n_skipped_existing += 1

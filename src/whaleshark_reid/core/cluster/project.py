@@ -1,6 +1,7 @@
 """2D UMAP projection for the web cluster view."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -70,7 +71,7 @@ def run_project_stage(
             "x": p.x,
             "y": p.y,
             "algo": p.algo,
-            "params_json": str(p.params),
+            "params_json": json.dumps(p.params, default=str),
         }
         for p in points
     ]

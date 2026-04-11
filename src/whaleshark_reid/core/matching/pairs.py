@@ -102,13 +102,7 @@ def run_matching_stage(
     candidates = pairs_below_threshold(distmat, uuids, threshold=distance_threshold)
 
     # Pull active pair decisions
-    rows = storage.conn.execute(
-        """
-        SELECT ann_a_uuid, ann_b_uuid, decision FROM pair_decisions
-        WHERE superseded_by IS NULL
-        """
-    ).fetchall()
-    active = [(r["ann_a_uuid"], r["ann_b_uuid"], r["decision"]) for r in rows]
+    active = storage.list_active_pair_decisions()
     n_before_filter = len(candidates)
     candidates = filter_by_decisions(candidates, active)
     n_filtered = n_before_filter - len(candidates)
@@ -116,27 +110,8 @@ def run_matching_stage(
     candidates = annotate_with_clusters(candidates, cluster_by_uuid)
     candidates = candidates[:max_queue_size]
 
-    # Replace pair_queue rows for this matching run
-    storage.conn.execute("DELETE FROM pair_queue WHERE run_id = ?", (matching_run_id,))
-    for position, p in enumerate(candidates):
-        storage.conn.execute(
-            """
-            INSERT INTO pair_queue (
-                run_id, ann_a_uuid, ann_b_uuid, distance,
-                cluster_a, cluster_b, same_cluster, position
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                matching_run_id,
-                p.ann_a_uuid,
-                p.ann_b_uuid,
-                p.distance,
-                p.cluster_a,
-                p.cluster_b,
-                1 if p.same_cluster else 0,
-                position,
-            ),
-        )
+    # Replace pair_queue rows for this matching run (atomic via storage method)
+    storage.replace_pair_queue(matching_run_id, candidates)
 
     dists = np.array([p.distance for p in candidates], dtype=np.float64)
     pctiles = _distance_percentiles(dists)

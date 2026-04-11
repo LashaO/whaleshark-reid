@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +32,26 @@ class Storage:
 
     def close(self) -> None:
         self.conn.close()
+
+    @contextmanager
+    def transaction(self):
+        """Context manager for explicit transactions in autocommit mode.
+
+        Usage:
+            with storage.transaction():
+                storage.conn.execute("INSERT ...")
+                storage.conn.execute("INSERT ...")
+
+        Wraps the body in BEGIN ... COMMIT (or ROLLBACK on exception).
+        """
+        self.conn.execute("BEGIN")
+        try:
+            yield
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
+        else:
+            self.conn.execute("COMMIT")
 
     # ----- annotation CRUD -----
 
@@ -166,3 +187,61 @@ class Storage:
             "SELECT status FROM runs WHERE run_id = ?", (run_id,)
         ).fetchone()
         return row["status"] if row else None
+
+    # ----- pair_decisions / pair_queue / annotation list (consumed by matching + feedback) -----
+
+    def list_annotation_uuids(self) -> list[str]:
+        """All annotation_uuids in the database."""
+        rows = self.conn.execute("SELECT annotation_uuid FROM annotations").fetchall()
+        return [r["annotation_uuid"] for r in rows]
+
+    def list_active_pair_decisions(self) -> list[tuple[str, str, str]]:
+        """Return active (non-superseded) pair decisions as (ann_a_uuid, ann_b_uuid, decision)."""
+        rows = self.conn.execute(
+            """
+            SELECT ann_a_uuid, ann_b_uuid, decision FROM pair_decisions
+            WHERE superseded_by IS NULL
+            """
+        ).fetchall()
+        return [(r["ann_a_uuid"], r["ann_b_uuid"], r["decision"]) for r in rows]
+
+    def list_active_match_pairs(self) -> list[tuple[str, str]]:
+        """Return active (non-superseded) match pairs as (ann_a_uuid, ann_b_uuid)."""
+        rows = self.conn.execute(
+            """
+            SELECT ann_a_uuid, ann_b_uuid FROM pair_decisions
+            WHERE decision = 'match' AND superseded_by IS NULL
+            """
+        ).fetchall()
+        return [(r["ann_a_uuid"], r["ann_b_uuid"]) for r in rows]
+
+    def replace_pair_queue(self, run_id: str, candidates) -> None:
+        """Replace all pair_queue rows for a run_id with new candidates.
+
+        candidates is an iterable of PairCandidate objects with fields:
+        ann_a_uuid, ann_b_uuid, distance, cluster_a, cluster_b, same_cluster.
+        Position is assigned by enumeration order.
+
+        Wrapped in a transaction for atomicity.
+        """
+        with self.transaction():
+            self.conn.execute("DELETE FROM pair_queue WHERE run_id = ?", (run_id,))
+            for position, p in enumerate(candidates):
+                self.conn.execute(
+                    """
+                    INSERT INTO pair_queue (
+                        run_id, ann_a_uuid, ann_b_uuid, distance,
+                        cluster_a, cluster_b, same_cluster, position
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_id,
+                        p.ann_a_uuid,
+                        p.ann_b_uuid,
+                        p.distance,
+                        p.cluster_a,
+                        p.cluster_b,
+                        1 if p.same_cluster else 0,
+                        position,
+                    ),
+                )
