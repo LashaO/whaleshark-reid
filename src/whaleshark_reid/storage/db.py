@@ -188,6 +188,19 @@ class Storage:
         ).fetchone()
         return row["status"] if row else None
 
+    def get_latest_run_id(self, stage: str) -> str | None:
+        """Return the most recent successful run_id for a given stage, or None if none exists."""
+        row = self.conn.execute(
+            """
+            SELECT run_id FROM runs
+            WHERE stage = ? AND status = 'ok'
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            (stage,),
+        ).fetchone()
+        return row["run_id"] if row else None
+
     # ----- pair_decisions / pair_queue / annotation list (consumed by matching + feedback) -----
 
     def list_annotation_uuids(self) -> list[str]:

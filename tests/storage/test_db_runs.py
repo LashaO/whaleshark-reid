@@ -72,3 +72,32 @@ def test_get_run_status_missing_returns_none(tmp_db_path: Path):
     storage = Storage(tmp_db_path)
     storage.init_schema()
     assert storage.get_run_status("nope") is None
+
+
+def test_get_latest_run_id_by_stage(tmp_db_path: Path):
+    storage = Storage(tmp_db_path)
+    storage.init_schema()
+
+    storage.begin_run(run_id="r1", stage="embed", config={})
+    storage.finish_run(run_id="r1", status="ok", metrics={})
+    storage.begin_run(run_id="r2", stage="embed", config={})
+    storage.finish_run(run_id="r2", status="ok", metrics={})
+    storage.begin_run(run_id="r3", stage="cluster", config={})
+    storage.finish_run(run_id="r3", status="ok", metrics={})
+
+    assert storage.get_latest_run_id(stage="embed") == "r2"
+    assert storage.get_latest_run_id(stage="cluster") == "r3"
+    assert storage.get_latest_run_id(stage="ingest") is None
+
+
+def test_get_latest_run_id_excludes_failed(tmp_db_path: Path):
+    storage = Storage(tmp_db_path)
+    storage.init_schema()
+
+    storage.begin_run(run_id="ok1", stage="embed", config={})
+    storage.finish_run(run_id="ok1", status="ok", metrics={})
+    storage.begin_run(run_id="bad1", stage="embed", config={})
+    storage.finish_run(run_id="bad1", status="failed", metrics={}, error="boom")
+
+    # Should return ok1, not bad1
+    assert storage.get_latest_run_id(stage="embed") == "ok1"

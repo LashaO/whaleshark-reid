@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import typer
 
+from whaleshark_reid.cli.commands.cluster import cluster_command
 from whaleshark_reid.cli.commands.embed import embed_command
 from whaleshark_reid.cli.commands.ingest import ingest_command
 
@@ -25,6 +26,7 @@ def main() -> None:
 
 app.command(name="ingest")(ingest_command)
 app.command(name="embed")(embed_command)
+app.command(name="cluster")(cluster_command)
 
 
 if __name__ == "__main__":
