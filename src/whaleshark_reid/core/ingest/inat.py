@@ -82,29 +82,49 @@ def ingest_inat_csv(
             name=_normalize_name(row.get("name")),
         )
 
-        # Backfill provenance from rich CSV if available
+        # Backfill provenance from rich CSV if available.
+        # Real-world dfx CSVs use sentinel values for missing data (-1.0 for GPS,
+        # "NA" for date, "" for strings, NaN for any nullable field). They also
+        # store numeric license codes as ints. Normalize all of that here so the
+        # Annotation pydantic always gets clean values.
+        STR_FIELDS = {
+            "photographer", "license", "date_captured",
+            "coco_url", "flickr_url", "quality_grade",
+        }
+        FLOAT_FIELDS = {"gps_lat_captured", "gps_lon_captured", "conf"}
+        INT_FIELDS = {"height", "width"}
+        STRING_NULLS = {"", "na", "n/a", "nan", "none", "null"}
+
         if rich_df is not None and obs_id in rich_df.index:
             r = rich_df.loc[obs_id]
-            for col, field in [
-                ("photographer", "photographer"),
-                ("license", "license"),
-                ("date_captured", "date_captured"),
-                ("gps_lat_captured", "gps_lat_captured"),
-                ("gps_lon_captured", "gps_lon_captured"),
-                ("coco_url", "coco_url"),
-                ("flickr_url", "flickr_url"),
-                ("height", "height"),
-                ("width", "width"),
-                ("conf", "conf"),
-                ("quality_grade", "quality_grade"),
-            ]:
-                if col in r and not (isinstance(r[col], float) and pd.isna(r[col])):
-                    val = r[col]
-                    if field in ("height", "width"):
-                        val = int(val)
-                    elif field in ("gps_lat_captured", "gps_lon_captured", "conf"):
-                        val = float(val)
-                    ann_kwargs[field] = val
+            for field in (STR_FIELDS | FLOAT_FIELDS | INT_FIELDS):
+                if field not in r:
+                    continue
+                raw = r[field]
+                # NaN check
+                if isinstance(raw, float) and pd.isna(raw):
+                    continue
+
+                if field in STR_FIELDS:
+                    s = str(raw).strip()
+                    if s.lower() in STRING_NULLS:
+                        continue
+                    val = s
+                elif field in FLOAT_FIELDS:
+                    try:
+                        val = float(raw)
+                    except (TypeError, ValueError):
+                        continue
+                    # Sentinel: -1 means "missing" for GPS coordinates in this dataset
+                    if field in ("gps_lat_captured", "gps_lon_captured") and val == -1.0:
+                        continue
+                else:  # INT_FIELDS
+                    try:
+                        val = int(raw)
+                    except (TypeError, ValueError):
+                        continue
+
+                ann_kwargs[field] = val
 
         # Derived composite keys (used later by Wildbook stratification; cheap to fill now)
         ann_kwargs["name_viewpoint"] = f"{ann_kwargs['name']}_{ann_kwargs['viewpoint']}"

@@ -39,8 +39,25 @@ def embed_annotations(
     """
     # Imported lazily so the test stub can monkeypatch AutoModel before import-time side effects.
     from transformers import AutoModel
+    from transformers.modeling_utils import PreTrainedModel
     from wbia_miew_id.datasets import MiewIdDataset, get_test_transforms
     from wbia_miew_id.engine.eval_fn import extract_embeddings as _extract_embeddings
+
+    # Compatibility shim: transformers >= 5.x expects every PreTrainedModel subclass to
+    # define `all_tied_weights_keys`, but the conservationxlabs/miewid-msv3 custom code
+    # on HuggingFace predates that API. Provide a class-level default of {} so the
+    # tied-weights initialization step becomes a no-op. MiewID has no tied weights, so
+    # this is correct. Idempotent — safe to call on every embed.
+    if not hasattr(PreTrainedModel, "all_tied_weights_keys"):
+        PreTrainedModel.all_tied_weights_keys = {}
+
+    # Real-world iNat photo downloads occasionally arrive truncated (network hiccup,
+    # interrupted download). PIL's default behavior is to raise OSError. Tell PIL to
+    # pad missing bytes with zeros instead, so a single corrupt photo doesn't kill an
+    # entire embed run. Affected photos will produce slightly degraded embeddings but
+    # we don't lose the run.
+    from PIL import ImageFile
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
