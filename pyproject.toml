@@ -19,6 +19,8 @@ dependencies = [
   "torch",
   "pillow",
   "wbia_miew_id @ file:///workspace/wbia-plugin-miew-id",
+  "typer>=0.12",
+  "rich>=13",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +29,9 @@ dev = [
   "pytest-cov",
   "ruff",
 ]
+
+[project.scripts]
+catalog = "whaleshark_reid.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
