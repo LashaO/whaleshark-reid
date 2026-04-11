@@ -13,6 +13,7 @@ from whaleshark_reid.cli.commands.ingest import ingest_command
 from whaleshark_reid.cli.commands.matching import matching_command
 from whaleshark_reid.cli.commands.project import project_command
 from whaleshark_reid.cli.commands.rebuild_individuals import rebuild_individuals_command
+from whaleshark_reid.cli.commands.run_all import run_all_command
 
 app = typer.Typer(
     name="catalog",
@@ -33,6 +34,7 @@ app.command(name="cluster")(cluster_command)
 app.command(name="matching")(matching_command)
 app.command(name="project")(project_command)
 app.command(name="rebuild-individuals")(rebuild_individuals_command)
+app.command(name="run-all")(run_all_command)
 
 
 if __name__ == "__main__":
