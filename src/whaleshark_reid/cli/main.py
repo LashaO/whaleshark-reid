@@ -11,6 +11,7 @@ from whaleshark_reid.cli.commands.cluster import cluster_command
 from whaleshark_reid.cli.commands.embed import embed_command
 from whaleshark_reid.cli.commands.ingest import ingest_command
 from whaleshark_reid.cli.commands.matching import matching_command
+from whaleshark_reid.cli.commands.project import project_command
 
 app = typer.Typer(
     name="catalog",
@@ -29,6 +30,7 @@ app.command(name="ingest")(ingest_command)
 app.command(name="embed")(embed_command)
 app.command(name="cluster")(cluster_command)
 app.command(name="matching")(matching_command)
+app.command(name="project")(project_command)
 
 
 if __name__ == "__main__":
