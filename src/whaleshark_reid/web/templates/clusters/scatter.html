@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Clusters{% endblock %}
+{% block head_extra %}
+<script src="/static/vendor/plotly.min.js"></script>
+<script src="/static/js/plotly_scatter.js" defer></script>
+{% endblock %}
+{% block content %}
+<h1>Embedding Clusters</h1>
+<div class="scatter-container" id="scatter"
+     data-projection-url="/api/projections/{{ proj_run_id }}"></div>
+{% endblock %}
