@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Annotations{% endblock %}
+{% block content %}
+<h1>Annotations ({{ result.total }})</h1>
+<table>
+    <thead>
+        <tr>
+            <th>UUID</th><th>Source</th><th>Obs ID</th><th>Date</th>
+            <th>GPS</th><th>Name UUID</th><th>Viewpoint</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for ann in result.items %}
+        <tr>
+            <td><a href="/annotation/{{ ann.annotation_uuid }}">{{ ann.annotation_uuid[:12] }}…</a></td>
+            <td>{{ ann.source }}</td>
+            <td>{{ ann.observation_id }}</td>
+            <td>{{ ann.date_captured or '—' }}</td>
+            <td>{{ ann.gps_lat_captured or '—' }}, {{ ann.gps_lon_captured or '—' }}</td>
+            <td>{{ ann.name_uuid[:8] if ann.name_uuid else '—' }}</td>
+            <td>{{ ann.viewpoint }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% if result.page > 0 %}
+<a href="/list/annotations?page={{ result.page - 1 }}">← Previous</a>
+{% endif %}
+{% if (result.page + 1) * result.page_size < result.total %}
+<a href="/list/annotations?page={{ result.page + 1 }}">Next →</a>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Annotation {{ ann.annotation_uuid[:12] }}{% endblock %}
+{% block content %}
+<h1>Annotation Detail</h1>
+<div class="card">
+    <img class="ann-img" src="/image/{{ ann.annotation_uuid }}?crop=true" style="max-width:400px;">
+    <dl class="meta-panel" style="margin-top:1rem;">
+        <dt>annotation_uuid</dt><dd>{{ ann.annotation_uuid }}</dd><br>
+        <dt>image_uuid</dt><dd>{{ ann.image_uuid }}</dd><br>
+        <dt>name_uuid</dt><dd>{{ ann.name_uuid or '—' }}</dd><br>
+        <dt>name</dt><dd>{{ ann.name or '—' }}</dd><br>
+        <dt>source</dt><dd>{{ ann.source }}</dd><br>
+        <dt>observation_id</dt><dd>{{ ann.observation_id }}</dd><br>
+        <dt>photo_index</dt><dd>{{ ann.photo_index }}</dd><br>
+        <dt>file_path</dt><dd>{{ ann.file_path }}</dd><br>
+        <dt>bbox</dt><dd>{{ ann.bbox }}</dd><br>
+        <dt>theta</dt><dd>{{ ann.theta }}</dd><br>
+        <dt>viewpoint</dt><dd>{{ ann.viewpoint }}</dd><br>
+        <dt>species</dt><dd>{{ ann.species }}</dd><br>
+        <dt>date_captured</dt><dd>{{ ann.date_captured or '—' }}</dd><br>
+        <dt>gps</dt><dd>{{ ann.gps_lat_captured or '—' }}, {{ ann.gps_lon_captured or '—' }}</dd><br>
+        <dt>photographer</dt><dd>{{ ann.photographer or '—' }}</dd><br>
+        <dt>license</dt><dd>{{ ann.license or '—' }}</dd><br>
+        <dt>quality_grade</dt><dd>{{ ann.quality_grade or '—' }}</dd><br>
+        <dt>conf</dt><dd>{{ ann.conf or '—' }}</dd><br>
+    </dl>
+</div>
+{% endblock %}
