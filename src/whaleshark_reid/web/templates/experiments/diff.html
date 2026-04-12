@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Diff: {{ diff.run_a.run.run_id }} vs {{ diff.run_b.run.run_id }}{% endblock %}
+{% block content %}
+<h1>Diff: {{ diff.run_a.run.run_id }} vs {{ diff.run_b.run.run_id }}</h1>
+<h2>Config</h2>
+<table>
+    <thead><tr><th>Key</th><th>Run A</th><th>Run B</th></tr></thead>
+    <tbody>
+    {% for d in diff.config_diff %}
+    <tr style="{% if d.changed %}background:rgba(255,255,0,0.05);{% endif %}">
+        <td>{{ d.key }}</td><td>{{ d.val_a }}</td><td>{{ d.val_b }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<h2>Metrics</h2>
+<table>
+    <thead><tr><th>Key</th><th>Run A</th><th>Run B</th></tr></thead>
+    <tbody>
+    {% for d in diff.metrics_diff %}
+    <tr style="{% if d.changed %}background:rgba(255,255,0,0.05);{% endif %}">
+        <td>{{ d.key }}</td><td>{{ d.val_a }}</td><td>{{ d.val_b }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

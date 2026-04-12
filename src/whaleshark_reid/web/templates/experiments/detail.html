@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Run {{ detail.run.run_id }}{% endblock %}
+{% block content %}
+<h1>Run: {{ detail.run.run_id }}</h1>
+<div class="card">
+    <dl class="meta-panel">
+        <dt>stage</dt><dd>{{ detail.run.stage }}</dd><br>
+        <dt>status</dt><dd>{{ detail.run.status }}</dd><br>
+        <dt>duration</dt><dd>{{ detail.run.duration_s or '—' }}s</dd><br>
+        <dt>started</dt><dd>{{ detail.run.started_at }}</dd><br>
+    </dl>
+</div>
+<h2>Reproduce</h2>
+<div class="card"><code>{{ detail.reproduce_cmd }}</code></div>
+<h2>Config</h2>
+<div class="card"><pre>{{ detail.config | tojson(indent=2) }}</pre></div>
+<h2>Metrics</h2>
+<div class="card"><pre>{{ detail.metrics | tojson(indent=2) }}</pre></div>
+{% if detail.log_tail %}
+<h2>Log (last 20 lines)</h2>
+<div class="card"><pre>{% for line in detail.log_tail %}{{ line }}
+{% endfor %}</pre></div>
+{% endif %}
+{% endblock %}

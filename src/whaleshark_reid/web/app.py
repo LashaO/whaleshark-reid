@@ -38,4 +38,7 @@ def create_app() -> FastAPI:
     from whaleshark_reid.web.routes import list as list_router
     app.include_router(list_router.router)
 
+    from whaleshark_reid.web.routes import experiments as exp_router
+    app.include_router(exp_router.router)
+
     return app

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Experiments{% endblock %}
+{% block content %}
+<h1>Experiment Runs</h1>
+<table>
+    <thead>
+        <tr><th>Run ID</th><th>Stage</th><th>Status</th><th>Duration</th><th>Config</th><th>Metrics</th><th>Diff</th></tr>
+    </thead>
+    <tbody>
+    {% for run in runs %}
+        <tr>
+            <td><a href="/run/{{ run.run_id }}">{{ run.run_id }}</a></td>
+            <td>{{ run.stage }}</td>
+            <td style="color:{% if run.status == 'ok' %}var(--success){% elif run.status == 'failed' %}var(--danger){% else %}var(--warning){% endif %}">{{ run.status }}</td>
+            <td>{{ run.duration_s or '—' }}s</td>
+            <td style="font-size:11px;">{{ run.config_preview }}</td>
+            <td style="font-size:11px;">{{ run.metrics_preview }}</td>
+            <td>
+                {% if not loop.last %}
+                <a href="/run/{{ run.run_id }}/diff/{{ runs[loop.index].run_id }}">diff ↓</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
