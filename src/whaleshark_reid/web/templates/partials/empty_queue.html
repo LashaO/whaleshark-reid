@@ -1,15 +1,16 @@
 <div class="card" style="text-align:center; padding:3rem;">
     <h2 style="color:var(--text-muted);">
-        {% if histogram and histogram.n_total > 0 and (min_d is not none or max_d is not none) %}
+        {% if histogram and histogram.n_total > 0 and filter_active|default(false) %}
             No pairs match the current filter
         {% else %}
             No pairs to review
         {% endif %}
     </h2>
     <p style="color:var(--text-muted); margin-top:0.5rem;">
-        {% if histogram and histogram.n_total > 0 and (min_d is not none or max_d is not none) %}
-            {{ histogram.n_total }} pairs exist in this run but none are within
-            [{{ '%.3f'|format(min_d or 0) }}, {{ '%.3f'|format(max_d or 2) }}].
+        {% if histogram and histogram.n_total > 0 and filter_active|default(false) %}
+            {{ histogram.n_total }} pairs exist in this run but none match the current filter
+            (distance [{{ '%.3f'|format(min_d or 0) }}, {{ '%.3f'|format(max_d or 2) }}]{% if min_td is not none or max_td is not none %},
+            Δt [{{ min_td if min_td is not none else '0' }}, {{ max_td if max_td is not none else '∞' }}] days{% endif %}).
             <a href="/review/pairs/{{ run_id }}">clear filter</a>
         {% else %}
             Run <code>catalog matching</code> to generate a pair queue, or adjust the distance threshold.

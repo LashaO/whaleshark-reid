@@ -65,20 +65,50 @@ def _pair_from_row(row, storage: Storage, total: int) -> PairView:
     )
 
 
-def _distance_filter_sql(min_d: Optional[float], max_d: Optional[float]) -> tuple[str, list]:
-    """Build a SQL fragment + params for distance range filtering. Returns ('', [])
-    if no filters are active."""
-    clauses = []
+def _build_filter_clauses(
+    min_d: Optional[float],
+    max_d: Optional[float],
+    min_td: Optional[int],
+    max_td: Optional[int],
+) -> tuple[str, str, list]:
+    """Build filter clauses for pair_queue queries.
+
+    Returns (join_sql, where_sql, params) where:
+      - join_sql: JOIN clauses to append to FROM (empty if no time-delta filter)
+      - where_sql: " AND ..." fragment to append to WHERE (empty if no filters)
+      - params: values to bind
+
+    Time-delta filters (min_td/max_td, in days) require joining the annotations
+    table twice to access each side's date_captured. Pairs where either
+    annotation has a null date are excluded when the time-delta filter is active.
+    """
+    joins: list[str] = []
+    clauses: list[str] = []
     params: list = []
+
     if min_d is not None:
-        clauses.append("distance >= ?")
+        clauses.append("pq.distance >= ?")
         params.append(min_d)
     if max_d is not None:
-        clauses.append("distance <= ?")
+        clauses.append("pq.distance <= ?")
         params.append(max_d)
-    if not clauses:
-        return "", []
-    return " AND " + " AND ".join(clauses), params
+
+    time_filter_active = min_td is not None or max_td is not None
+    if time_filter_active:
+        joins.append("JOIN annotations a ON a.annotation_uuid = pq.ann_a_uuid")
+        joins.append("JOIN annotations b ON b.annotation_uuid = pq.ann_b_uuid")
+        # Exclude pairs with any null date when filter is active
+        clauses.append("a.date_captured IS NOT NULL AND b.date_captured IS NOT NULL")
+        if min_td is not None:
+            clauses.append("ABS(julianday(a.date_captured) - julianday(b.date_captured)) >= ?")
+            params.append(min_td)
+        if max_td is not None:
+            clauses.append("ABS(julianday(a.date_captured) - julianday(b.date_captured)) <= ?")
+            params.append(max_td)
+
+    join_sql = (" " + " ".join(joins)) if joins else ""
+    where_sql = (" AND " + " AND ".join(clauses)) if clauses else ""
+    return join_sql, where_sql, params
 
 
 def get_pair(
@@ -87,17 +117,19 @@ def get_pair(
     position: int,
     min_d: Optional[float] = None,
     max_d: Optional[float] = None,
+    min_td: Optional[int] = None,
+    max_td: Optional[int] = None,
 ) -> Optional[PairView]:
     """Get the pair at position `position` within the filtered subset.
 
-    When min_d/max_d are set, position is an offset into the FILTERED queue, not
+    When filters are set, position is an offset into the FILTERED queue, not
     the full queue — so position=0 is the lowest-distance pair within the filter range.
     """
-    filter_sql, filter_params = _distance_filter_sql(min_d, max_d)
+    join_sql, where_sql, filter_params = _build_filter_clauses(min_d, max_d, min_td, max_td)
 
     # Count pairs in the filtered view
     total = storage.conn.execute(
-        f"SELECT COUNT(*) FROM pair_queue WHERE run_id = ?{filter_sql}",
+        f"SELECT COUNT(*) FROM pair_queue pq{join_sql} WHERE pq.run_id = ?{where_sql}",
         [run_id, *filter_params],
     ).fetchone()[0]
     if total == 0:
@@ -105,9 +137,9 @@ def get_pair(
 
     row = storage.conn.execute(
         f"""
-        SELECT * FROM pair_queue
-        WHERE run_id = ?{filter_sql}
-        ORDER BY position ASC
+        SELECT pq.* FROM pair_queue pq{join_sql}
+        WHERE pq.run_id = ?{where_sql}
+        ORDER BY pq.position ASC
         LIMIT 1 OFFSET ?
         """,
         [run_id, *filter_params, position],
@@ -155,6 +187,8 @@ def get_next_undecided(
     from_queue_id: int,
     min_d: Optional[float] = None,
     max_d: Optional[float] = None,
+    min_td: Optional[int] = None,
+    max_td: Optional[int] = None,
 ) -> Optional[PairView]:
     """Return the next pair (by position) within the filter range whose pair has
     no active match/no_match decision. `from_queue_id` is the queue_id we're
@@ -165,17 +199,17 @@ def get_next_undecided(
     ).fetchone()
     from_position = current["position"] if current else -1
 
-    filter_sql, filter_params = _distance_filter_sql(min_d, max_d)
+    join_sql, where_sql, filter_params = _build_filter_clauses(min_d, max_d, min_td, max_td)
 
     total = storage.conn.execute(
-        f"SELECT COUNT(*) FROM pair_queue WHERE run_id = ?{filter_sql}",
+        f"SELECT COUNT(*) FROM pair_queue pq{join_sql} WHERE pq.run_id = ?{where_sql}",
         [run_id, *filter_params],
     ).fetchone()[0]
 
     row = storage.conn.execute(
         f"""
-        SELECT pq.* FROM pair_queue pq
-        WHERE pq.run_id = ? AND pq.position > ?{filter_sql}
+        SELECT pq.* FROM pair_queue pq{join_sql}
+        WHERE pq.run_id = ? AND pq.position > ?{where_sql}
         AND NOT EXISTS (
             SELECT 1 FROM pair_decisions pd
             WHERE pd.ann_a_uuid = pq.ann_a_uuid AND pd.ann_b_uuid = pq.ann_b_uuid
@@ -198,12 +232,15 @@ def filtered_position_index(
     pair_position: int,
     min_d: Optional[float] = None,
     max_d: Optional[float] = None,
+    min_td: Optional[int] = None,
+    max_td: Optional[int] = None,
 ) -> int:
     """Return the 0-indexed offset of the pair at `pair_position` (the raw pair_queue.position)
     within the filtered subset. I.e., how many filtered pairs come before it."""
-    filter_sql, filter_params = _distance_filter_sql(min_d, max_d)
+    join_sql, where_sql, filter_params = _build_filter_clauses(min_d, max_d, min_td, max_td)
     row = storage.conn.execute(
-        f"SELECT COUNT(*) FROM pair_queue WHERE run_id = ? AND position < ?{filter_sql}",
+        f"SELECT COUNT(*) FROM pair_queue pq{join_sql} "
+        f"WHERE pq.run_id = ? AND pq.position < ?{where_sql}",
         [run_id, pair_position, *filter_params],
     ).fetchone()
     return row[0]

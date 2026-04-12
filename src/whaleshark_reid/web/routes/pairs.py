@@ -15,6 +15,25 @@ from whaleshark_reid.web.settings import Settings
 router = APIRouter()
 
 
+def _parse_optional_int(raw: Optional[str]) -> Optional[int]:
+    """Coerce empty/whitespace form values to None; parse valid ints."""
+    if raw is None:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    return int(raw)
+
+
+def _parse_optional_float(raw: Optional[str]) -> Optional[float]:
+    if raw is None:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    return float(raw)
+
+
 @router.get("/review/pairs")
 @router.get("/review/pairs/")
 def review_pairs_index(storage: Storage = Depends(get_storage)):
@@ -30,12 +49,22 @@ def carousel(
     request: Request,
     run_id: str,
     position: int = 0,
-    min_d: Optional[float] = None,
-    max_d: Optional[float] = None,
+    min_d: Optional[str] = None,
+    max_d: Optional[str] = None,
+    min_td: Optional[str] = None,
+    max_td: Optional[str] = None,
     storage: Storage = Depends(get_storage),
 ):
-    pair = pq_service.get_pair(storage, run_id, position, min_d=min_d, max_d=max_d)
+    min_d = _parse_optional_float(min_d)
+    max_d = _parse_optional_float(max_d)
+    min_td = _parse_optional_int(min_td)
+    max_td = _parse_optional_int(max_td)
+    pair = pq_service.get_pair(
+        storage, run_id, position,
+        min_d=min_d, max_d=max_d, min_td=min_td, max_td=max_td,
+    )
     histogram = pq_service.get_distance_histogram(storage, run_id)
+    filter_active = any(v is not None for v in (min_d, max_d, min_td, max_td))
     if pair is None:
         return templates.TemplateResponse(
             "partials/empty_queue.html",
@@ -45,6 +74,9 @@ def carousel(
                 "histogram": histogram,
                 "min_d": min_d,
                 "max_d": max_d,
+                "min_td": min_td,
+                "max_td": max_td,
+                "filter_active": filter_active,
             },
         )
     return templates.TemplateResponse(
@@ -55,7 +87,9 @@ def carousel(
             "histogram": histogram,
             "min_d": min_d if min_d is not None else histogram["min"],
             "max_d": max_d if max_d is not None else histogram["max"],
-            "filter_active": min_d is not None or max_d is not None,
+            "min_td": min_td,
+            "max_td": max_td,
+            "filter_active": filter_active,
             "view_position": position,  # offset within the filtered subset
         },
     )
@@ -67,11 +101,17 @@ def decide(
     queue_id: int,
     decision: str = Form(...),
     notes: str = Form(""),
-    min_d: Optional[float] = Form(None),
-    max_d: Optional[float] = Form(None),
+    min_d: Optional[str] = Form(None),
+    max_d: Optional[str] = Form(None),
+    min_td: Optional[str] = Form(None),
+    max_td: Optional[str] = Form(None),
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(get_settings),
 ):
+    min_d = _parse_optional_float(min_d)
+    max_d = _parse_optional_float(max_d)
+    min_td = _parse_optional_int(min_td)
+    max_td = _parse_optional_int(max_td)
     current = pq_service.get_pair_by_id(storage, queue_id)
     if current is None:
         return templates.TemplateResponse(
@@ -87,8 +127,11 @@ def decide(
         from_queue_id=queue_id,
         min_d=min_d,
         max_d=max_d,
+        min_td=min_td,
+        max_td=max_td,
     )
     histogram = pq_service.get_distance_histogram(storage, current.run_id)
+    filter_active = any(v is not None for v in (min_d, max_d, min_td, max_td))
     if next_pair is None:
         return templates.TemplateResponse(
             "partials/empty_queue.html",
@@ -98,11 +141,15 @@ def decide(
                 "histogram": histogram,
                 "min_d": min_d,
                 "max_d": max_d,
+                "min_td": min_td,
+                "max_td": max_td,
+                "filter_active": filter_active,
             },
         )
     # Compute the filtered-subset offset for the next pair so the UI counter stays accurate
     view_position = pq_service.filtered_position_index(
-        storage, current.run_id, next_pair.position, min_d=min_d, max_d=max_d
+        storage, current.run_id, next_pair.position,
+        min_d=min_d, max_d=max_d, min_td=min_td, max_td=max_td,
     )
     return templates.TemplateResponse(
         "partials/pair_card.html",
@@ -112,7 +159,9 @@ def decide(
             "histogram": histogram,
             "min_d": min_d if min_d is not None else histogram["min"],
             "max_d": max_d if max_d is not None else histogram["max"],
-            "filter_active": min_d is not None or max_d is not None,
+            "min_td": min_td,
+            "max_td": max_td,
+            "filter_active": filter_active,
             "view_position": view_position,
         },
     )

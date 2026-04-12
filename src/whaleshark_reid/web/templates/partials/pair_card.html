@@ -54,6 +54,20 @@
                        value="{{ '%.3f'|format(max_d) }}"
                        style="width:55px; padding:2px 4px; background:var(--bg); color:var(--text); border:1px solid var(--border); font-family:inherit; font-size:11px;">
             </label>
+            <span style="color:var(--border);">|</span>
+            <span style="color:var(--text-muted);">Δt days</span>
+            <label style="color:var(--text-muted);">min
+                <input type="number" name="min_td" step="1" min="0"
+                       value="{{ min_td if min_td is not none else '' }}"
+                       placeholder="—"
+                       style="width:55px; padding:2px 4px; background:var(--bg); color:var(--text); border:1px solid var(--border); font-family:inherit; font-size:11px;">
+            </label>
+            <label style="color:var(--text-muted);">max
+                <input type="number" name="max_td" step="1" min="0"
+                       value="{{ max_td if max_td is not none else '' }}"
+                       placeholder="—"
+                       style="width:55px; padding:2px 4px; background:var(--bg); color:var(--text); border:1px solid var(--border); font-family:inherit; font-size:11px;">
+            </label>
             <input type="hidden" name="position" value="0">
             <button class="btn" type="submit" style="padding:2px 10px; font-size:11px;">Apply</button>
             {% if filter_active %}
@@ -110,24 +124,24 @@
     <div style="display:flex; gap:0.5rem; margin-top:1rem;">
         <button class="btn btn-match" data-shortcut="y"
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "match", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
+                hx-vals='{"decision": "match", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}", "min_td": "{{ min_td if min_td is not none else '' }}", "max_td": "{{ max_td if max_td is not none else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">✓ Match (Y)</button>
         <button class="btn btn-nomatch" data-shortcut="n"
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "no_match", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
+                hx-vals='{"decision": "no_match", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}", "min_td": "{{ min_td if min_td is not none else '' }}", "max_td": "{{ max_td if max_td is not none else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">✗ No match (N)</button>
         <button class="btn btn-unsure" data-shortcut="u"
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "unsure", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
+                hx-vals='{"decision": "unsure", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}", "min_td": "{{ min_td if min_td is not none else '' }}", "max_td": "{{ max_td if max_td is not none else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">? Unsure (U)</button>
         <button class="btn" data-shortcut=" "
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "skip", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
+                hx-vals='{"decision": "skip", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}", "min_td": "{{ min_td if min_td is not none else '' }}", "max_td": "{{ max_td if max_td is not none else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">⏭ Skip (Space)</button>
     </div>
 
     <div style="display:flex; justify-content:space-between; margin-top:1rem; color:var(--text-muted);">
-        {% set filter_qs %}{% if filter_active %}&min_d={{ '%.4f'|format(min_d) }}&max_d={{ '%.4f'|format(max_d) }}{% endif %}{% endset %}
+        {% set filter_qs %}{% if filter_active %}&min_d={{ '%.4f'|format(min_d) }}&max_d={{ '%.4f'|format(max_d) }}{% if min_td is not none %}&min_td={{ min_td }}{% endif %}{% if max_td is not none %}&max_td={{ max_td }}{% endif %}{% endif %}{% endset %}
         {% if view_position > 0 %}
         <a href="/review/pairs/{{ pair.run_id }}?position={{ view_position - 1 }}{{ filter_qs }}">← Prev (J)</a>
         {% else %}<span></span>{% endif %}
