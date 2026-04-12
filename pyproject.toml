@@ -21,6 +21,12 @@ dependencies = [
   "wbia_miew_id @ file:///workspace/wbia-plugin-miew-id",
   "typer>=0.12",
   "rich>=13",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "jinja2",
+  "python-multipart",
+  "pydantic-settings",
+  "httpx",
 ]
 
 [project.optional-dependencies]
@@ -37,7 +43,7 @@ catalog = "whaleshark_reid.cli.main:app"
 where = ["src"]
 
 [tool.setuptools.package-data]
-whaleshark_reid = ["storage/schema.sql"]
+whaleshark_reid = ["storage/schema.sql", "web/templates/**/*.html", "web/static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

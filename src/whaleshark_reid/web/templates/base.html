@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}whaleshark-reid{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <script src="/static/vendor/htmx.min.js" defer></script>
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    <nav class="top-nav">
+        <span class="brand">whaleshark-reid <span class="tag">dev</span></span>
+        <a href="/review/pairs/">Review</a>
+        <a href="/list/annotations">List</a>
+        <a href="/clusters/">Clusters</a>
+        <a href="/experiments">Experiments</a>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

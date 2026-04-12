@@ -1,0 +1,109 @@
+/* Dark theme for whaleshark-reid dev UI */
+:root {
+    --bg: #1a1a2e;
+    --bg-card: #16213e;
+    --bg-input: #0f3460;
+    --text: #e0e0e0;
+    --text-muted: #888;
+    --accent: #00adb5;
+    --success: #4caf50;
+    --danger: #f44336;
+    --warning: #ff9800;
+    --border: #333;
+    --radius: 6px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.top-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+}
+
+.top-nav .brand { font-weight: bold; color: var(--accent); }
+.top-nav .tag { font-size: 10px; color: var(--text-muted); }
+.top-nav a { color: var(--text); text-decoration: none; }
+.top-nav a:hover { color: var(--accent); }
+
+main { padding: 1rem; max-width: 1400px; margin: 0 auto; }
+
+/* Cards */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--text-muted); font-weight: normal; text-transform: uppercase; font-size: 11px; }
+tr:hover { background: rgba(255,255,255,0.03); }
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-input);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+}
+.btn:hover { border-color: var(--accent); }
+.btn-match { border-color: var(--success); color: var(--success); }
+.btn-nomatch { border-color: var(--danger); color: var(--danger); }
+.btn-unsure { border-color: var(--warning); color: var(--warning); }
+
+/* Metadata panels */
+.meta-panel {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.meta-panel dt { display: inline; font-weight: bold; color: var(--text); }
+.meta-panel dd { display: inline; margin-left: 0.3rem; margin-right: 1rem; }
+
+/* Images */
+.ann-img { max-width: 100%; height: auto; border-radius: var(--radius); }
+
+/* Pair carousel layout */
+.pair-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 1rem;
+    align-items: start;
+}
+
+/* Map inset */
+.map-inset { width: 300px; height: 200px; border-radius: var(--radius); }
+
+/* Cluster scatter */
+.scatter-container { width: 100%; height: 500px; }
+
+/* Toast notifications */
+.toast {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.8rem 1.2rem;
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    z-index: 1000;
+}
