@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from whaleshark_reid.storage.db import Storage
 from whaleshark_reid.web.app import templates
@@ -11,6 +11,16 @@ from whaleshark_reid.web.services import pair_queue as pq_service
 from whaleshark_reid.web.settings import Settings
 
 router = APIRouter()
+
+
+@router.get("/review/pairs")
+@router.get("/review/pairs/")
+def review_pairs_index(storage: Storage = Depends(get_storage)):
+    """Redirect to the latest matching run's carousel, or to /experiments if none exists."""
+    latest = storage.get_latest_run_id("matching")
+    if latest:
+        return RedirectResponse(url=f"/review/pairs/{latest}", status_code=307)
+    return RedirectResponse(url="/experiments", status_code=307)
 
 
 @router.get("/review/pairs/{run_id}", response_class=HTMLResponse)

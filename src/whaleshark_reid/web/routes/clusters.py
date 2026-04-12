@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from whaleshark_reid.storage.db import Storage
 from whaleshark_reid.web.app import templates
@@ -11,6 +11,16 @@ from whaleshark_reid.web.services import cluster_view as cv_service
 from whaleshark_reid.web.settings import Settings
 
 router = APIRouter()
+
+
+@router.get("/clusters")
+@router.get("/clusters/")
+def clusters_index(storage: Storage = Depends(get_storage)):
+    """Redirect to the latest cluster run's scatter page, or to /experiments if none exists."""
+    latest = storage.get_latest_run_id("cluster")
+    if latest:
+        return RedirectResponse(url=f"/clusters/{latest}", status_code=307)
+    return RedirectResponse(url="/experiments", status_code=307)
 
 
 @router.get("/clusters/{run_id}", response_class=HTMLResponse)
