@@ -16,7 +16,8 @@ def ingest_command(
     photos_dir: Path = typer.Option(..., "--photos-dir", exists=True, file_okay=False),
     source: str = typer.Option("inat", "--source"),
     rich_csv: Optional[Path] = typer.Option(
-        None, "--rich-csv", exists=True, help="Optional dfx CSV for provenance backfill"
+        None, "--rich-csv", exists=True,
+        help="Optional provenance CSV — accepts either the dfx schema or the raw iNat export (df_exploded_inat_v1 format)"
     ),
     db_path: Path = typer.Option(Path("cache/state.db"), "--db-path"),
     cache_dir: Path = typer.Option(Path("cache/"), "--cache-dir"),

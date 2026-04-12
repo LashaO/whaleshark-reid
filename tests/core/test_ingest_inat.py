@@ -104,6 +104,30 @@ def test_ingest_joins_rich_csv_for_provenance(tmp_db_path: Path):
     assert ann.quality_grade == "research"
 
 
+def test_ingest_joins_raw_inat_csv_for_provenance(tmp_db_path: Path):
+    """Raw iNat export (df_exploded_inat_v1.csv style) uses different column names
+    than the dfx schema but should backfill the same fields. Detected by the
+    'Encounter.decimalLatitude' column."""
+    storage = Storage(tmp_db_path)
+    storage.init_schema()
+
+    ingest_inat_csv(
+        csv_path=FIXTURES / "mini_inat.csv",
+        photos_dir=FIXTURES / "photos",
+        storage=storage,
+        run_id="run_t1",
+        rich_csv_path=FIXTURES / "mini_inat_raw.csv",
+    )
+
+    from whaleshark_reid.core.schema import inat_annotation_uuid
+    ann = storage.get_annotation(inat_annotation_uuid(100, 0))
+    assert ann.photographer == "alice"
+    assert ann.gps_lat_captured == 25.66
+    assert ann.gps_lon_captured == -80.17
+    assert ann.date_captured == "2025-11-19"
+    assert ann.quality_grade == "research"
+
+
 def test_ingest_missing_file_is_counted_but_not_fatal(tmp_db_path: Path, tmp_path: Path):
     # Build a minimal CSV referencing a non-existent file
     csv_text = ",theta,viewpoint,name,file_name,species,file_path,x,y,w,h\n"

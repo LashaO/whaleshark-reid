@@ -1,0 +1,11 @@
+observation_id,observed_on,Encounter.decimalLatitude,Encounter.decimalLongitude,observer,quality_grade,photo_count,photo_filenames
+100,2025-11-19,25.66,-80.17,alice,research,1,obs100_1.jpg
+101,2025-11-20,26.11,-80.12,bob,research,1,obs101_1.jpg
+102,2025-11-21,25.90,-80.05,cara,research,1,obs102_1.jpg
+103,2025-11-22,24.90,-80.10,dan,casual,1,obs103_1.jpg
+104,2025-11-23,25.50,-80.20,eva,research,1,obs104_1.jpg
+105,2025-11-24,26.00,-80.00,fran,research,1,obs105_1.jpg
+106,2025-11-25,25.70,-80.15,gus,research,1,obs106_1.jpg
+107,2025-11-26,25.80,-80.18,hal,casual,1,obs107_1.jpg
+108,2025-11-27,25.95,-80.08,iva,research,1,obs108_1.jpg
+109,2025-11-28,25.85,-80.12,jon,research,1,obs109_1.jpg

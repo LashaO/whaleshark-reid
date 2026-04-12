@@ -40,6 +40,35 @@ def _normalize_name(raw) -> Optional[str]:
     return None if s.lower() in ("", "unknown", "nan") else s
 
 
+def _load_rich_csv(rich_csv_path: Path) -> pd.DataFrame:
+    """Load the provenance CSV and normalize it to the dfx schema indexed by
+    observation_id.
+
+    Two formats are accepted:
+      - dfx schema: columns like gps_lat_captured, date_captured, photographer.
+        One row per observation, indexed by observation_id.
+      - Raw iNat export (df_exploded_inat_v1.csv): columns like
+        Encounter.decimalLatitude, observed_on, observer. Exploded per photo,
+        but the observation-level fields we care about are constant per
+        observation — so we rename columns and drop duplicate observation_ids.
+
+    Raw format is detected by the presence of Encounter.decimalLatitude.
+    """
+    df = pd.read_csv(rich_csv_path)
+    if "Encounter.decimalLatitude" in df.columns:
+        df = df.rename(
+            columns={
+                "Encounter.decimalLatitude": "gps_lat_captured",
+                "Encounter.decimalLongitude": "gps_lon_captured",
+                "observed_on": "date_captured",
+                "observer": "photographer",
+                # quality_grade already matches
+            }
+        )
+        df = df.drop_duplicates(subset=["observation_id"])
+    return df.set_index("observation_id")
+
+
 def ingest_inat_csv(
     csv_path: Path,
     photos_dir: Path,
@@ -51,7 +80,7 @@ def ingest_inat_csv(
 
     rich_df: Optional[pd.DataFrame] = None
     if rich_csv_path is not None:
-        rich_df = pd.read_csv(rich_csv_path).set_index("observation_id")
+        rich_df = _load_rich_csv(rich_csv_path)
 
     n_read = len(df)
     n_ingested = 0
