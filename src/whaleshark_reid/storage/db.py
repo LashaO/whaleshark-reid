@@ -20,7 +20,7 @@ class Storage:
     def __init__(self, db_path: Path | str):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path), isolation_level=None)
+        self.conn = sqlite3.connect(str(self.db_path), isolation_level=None, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode = WAL;")
         self.conn.execute("PRAGMA busy_timeout = 5000;")

@@ -29,4 +29,7 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    from whaleshark_reid.web.routes import image
+    app.include_router(image.router)
+
     return app
