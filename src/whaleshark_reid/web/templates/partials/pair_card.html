@@ -1,0 +1,80 @@
+<div class="card"
+     data-pair-position="{{ pair.position }}"
+     data-pair-total="{{ pair.total }}"
+     data-run-id="{{ pair.run_id }}"
+     data-queue-id="{{ pair.queue_id }}"
+     data-annotation-uuid-a="{{ pair.ann_a.annotation_uuid }}"
+     data-annotation-uuid-b="{{ pair.ann_b.annotation_uuid }}"
+     data-distance="{{ '%.3f'|format(pair.distance) }}">
+
+    <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem; color:var(--text-muted);">
+        <span>pair {{ pair.position + 1 }}/{{ pair.total }}</span>
+        <span>·</span>
+        <span>d={{ '%.3f'|format(pair.distance) }}</span>
+        {% if pair.same_cluster %}<span style="color:var(--success)">· same cluster</span>{% endif %}
+        {% if pair.gps_delta_km is not none %}<span>· {{ pair.gps_delta_km }}km</span>{% endif %}
+        {% if pair.time_delta_days is not none %}<span>· {{ pair.time_delta_days }}d</span>{% endif %}
+    </div>
+
+    <div class="pair-layout">
+        <div>
+            <img class="ann-img" src="/image/{{ pair.ann_a.annotation_uuid }}?crop=true" alt="ann_a">
+            <dl class="meta-panel">
+                <dt>uuid</dt><dd>{{ pair.ann_a.annotation_uuid[:12] }}…</dd>
+                <dt>obs</dt><dd>{{ pair.ann_a.observation_id }}</dd>
+                <dt>date</dt><dd>{{ pair.ann_a.date_captured or '—' }}</dd>
+                <dt>gps</dt><dd>{{ pair.ann_a.gps_lat_captured or '—' }}, {{ pair.ann_a.gps_lon_captured or '—' }}</dd>
+                <dt>conf</dt><dd>{{ '%.2f'|format(pair.ann_a.conf) if pair.ann_a.conf else '—' }}</dd>
+                <dt>photographer</dt><dd>{{ pair.ann_a.photographer or '—' }}</dd>
+            </dl>
+        </div>
+        <div>
+            <img class="ann-img" src="/image/{{ pair.ann_b.annotation_uuid }}?crop=true" alt="ann_b">
+            <dl class="meta-panel">
+                <dt>uuid</dt><dd>{{ pair.ann_b.annotation_uuid[:12] }}…</dd>
+                <dt>obs</dt><dd>{{ pair.ann_b.observation_id }}</dd>
+                <dt>date</dt><dd>{{ pair.ann_b.date_captured or '—' }}</dd>
+                <dt>gps</dt><dd>{{ pair.ann_b.gps_lat_captured or '—' }}, {{ pair.ann_b.gps_lon_captured or '—' }}</dd>
+                <dt>conf</dt><dd>{{ '%.2f'|format(pair.ann_b.conf) if pair.ann_b.conf else '—' }}</dd>
+                <dt>photographer</dt><dd>{{ pair.ann_b.photographer or '—' }}</dd>
+            </dl>
+        </div>
+        <div>
+            <div class="map-inset" id="map-inset"
+                 data-lat-a="{{ pair.ann_a.gps_lat_captured or '' }}"
+                 data-lon-a="{{ pair.ann_a.gps_lon_captured or '' }}"
+                 data-lat-b="{{ pair.ann_b.gps_lat_captured or '' }}"
+                 data-lon-b="{{ pair.ann_b.gps_lon_captured or '' }}">
+                <span style="color:var(--text-muted)">map (Phase 3+)</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+        <button class="btn btn-match" data-shortcut="y"
+                hx-post="/api/pairs/{{ pair.queue_id }}/decide"
+                hx-vals='{"decision": "match"}'
+                hx-target="#pair-card" hx-swap="innerHTML">✓ Match (Y)</button>
+        <button class="btn btn-nomatch" data-shortcut="n"
+                hx-post="/api/pairs/{{ pair.queue_id }}/decide"
+                hx-vals='{"decision": "no_match"}'
+                hx-target="#pair-card" hx-swap="innerHTML">✗ No match (N)</button>
+        <button class="btn btn-unsure" data-shortcut="u"
+                hx-post="/api/pairs/{{ pair.queue_id }}/decide"
+                hx-vals='{"decision": "unsure"}'
+                hx-target="#pair-card" hx-swap="innerHTML">? Unsure (U)</button>
+        <button class="btn" data-shortcut=" "
+                hx-post="/api/pairs/{{ pair.queue_id }}/decide"
+                hx-vals='{"decision": "skip"}'
+                hx-target="#pair-card" hx-swap="innerHTML">⏭ Skip (Space)</button>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; margin-top:1rem; color:var(--text-muted);">
+        {% if pair.position > 0 %}
+        <a href="/review/pairs/{{ pair.run_id }}?position={{ pair.position - 1 }}">← Prev (J)</a>
+        {% else %}<span></span>{% endif %}
+        {% if pair.position < pair.total - 1 %}
+        <a href="/review/pairs/{{ pair.run_id }}?position={{ pair.position + 1 }}">Next (K) →</a>
+        {% else %}<span></span>{% endif %}
+    </div>
+</div>

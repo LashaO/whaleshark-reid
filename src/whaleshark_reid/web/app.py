@@ -32,4 +32,7 @@ def create_app() -> FastAPI:
     from whaleshark_reid.web.routes import image
     app.include_router(image.router)
 
+    from whaleshark_reid.web.routes import pairs
+    app.include_router(pairs.router)
+
     return app
