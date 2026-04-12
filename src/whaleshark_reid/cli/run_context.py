@@ -94,4 +94,8 @@ def run_context(
         raise
     else:
         if ctx.storage.get_run_status(ctx.run_id) == "running":
-            ctx.finish(status="ok")
+            ctx.logger.warning(
+                "command exited without explicit ctx.finish(); "
+                "marking run as ok with empty metrics"
+            )
+            ctx.finish(status="ok", metrics={"_autofinished": True})

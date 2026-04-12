@@ -16,7 +16,12 @@ def embed_command(
     batch_size: int = typer.Option(32, "--batch-size"),
     num_workers: int = typer.Option(2, "--num-workers"),
     use_bbox: bool = typer.Option(True, "--use-bbox/--no-use-bbox"),
-    only_missing: bool = typer.Option(True, "--only-missing/--force-reembed"),
+    only_missing: bool = typer.Option(
+        True, "--only-missing/--force-reembed",
+        help="Skip annotations already in THIS run's parquet (per-run cache, not global). "
+             "Currently every new run_id starts with an empty cache, so this flag is "
+             "effectively a no-op. Use --force-reembed to be explicit.",
+    ),
     device: Optional[str] = typer.Option(None, "--device", help="cuda | cpu | mps; default: auto"),
     db_path: Path = typer.Option(Path("cache/state.db"), "--db-path"),
     cache_dir: Path = typer.Option(Path("cache/"), "--cache-dir"),
@@ -37,6 +42,9 @@ def embed_command(
     }
     with run_context(stage="embed", storage=storage, cache_dir=cache_dir, config=config) as ctx:
         ctx.logger.info(f"embedding model={model} batch_size={batch_size} use_bbox={use_bbox}")
+        # NOTE: only_missing checks against this run's own parquet (per-run_id isolation),
+        # NOT across all prior embed runs. A future enhancement would union across all
+        # prior successful embed parquets to skip truly-already-embedded annotations.
         result = run_embed_stage(
             storage=storage,
             cache_dir=cache_dir,

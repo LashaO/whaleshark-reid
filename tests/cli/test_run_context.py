@@ -50,6 +50,10 @@ def test_run_context_manager_success(tmp_db_path: Path, tmp_cache_dir: Path):
         # do nothing — exits without explicit finish
 
     assert storage.get_run_status(run_id) == "ok"
+    row = storage.conn.execute(
+        "SELECT metrics_json FROM runs WHERE run_id = ?", (run_id,)
+    ).fetchone()
+    assert json.loads(row["metrics_json"]) == {"_autofinished": True}
 
 
 def test_run_context_manager_explicit_finish(tmp_db_path: Path, tmp_cache_dir: Path):

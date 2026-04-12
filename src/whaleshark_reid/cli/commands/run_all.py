@@ -33,6 +33,15 @@ def run_all_command(
     cache_dir: Path = typer.Option(Path("cache/"), "--cache-dir"),
 ) -> None:
     """Run ingest → embed → cluster → matching → project as five separate runs."""
+    # ⚠️  MAINTAINER WARNING: each sub-command is a Typer-decorated function whose
+    # "default" values are actually OptionInfo instances, not real Python values.
+    # When calling these functions directly (as we do below), you MUST pass every
+    # parameter explicitly — if you omit one, Python will use the OptionInfo as the
+    # actual argument value, which will crash deep inside the core stage function
+    # with a cryptic "OptionInfo has no attribute" error.
+    #
+    # If you add a new parameter to any sub-command, YOU MUST also thread it
+    # through the corresponding call site here.
     typer.echo("→ ingest")
     ingest_command(
         csv=csv,
