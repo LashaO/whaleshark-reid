@@ -21,3 +21,11 @@ document.addEventListener('keydown', (e) => {
   const btn = document.querySelector(`[data-shortcut="${key}"]`);
   if (btn) { btn.click(); e.preventDefault(); }
 });
+
+// After every HTMX swap, re-initialize the Leaflet map inset on the new pair card.
+// Without this, the map shows "map loading…" after any decision click.
+document.body.addEventListener('htmx:afterSwap', () => {
+  if (typeof initMapInset === 'function') {
+    initMapInset();
+  }
+});

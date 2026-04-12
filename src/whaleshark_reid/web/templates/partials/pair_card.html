@@ -5,10 +5,67 @@
      data-queue-id="{{ pair.queue_id }}"
      data-annotation-uuid-a="{{ pair.ann_a.annotation_uuid }}"
      data-annotation-uuid-b="{{ pair.ann_b.annotation_uuid }}"
-     data-distance="{{ '%.3f'|format(pair.distance) }}">
+     data-distance="{{ '%.3f'|format(pair.distance) }}"
+     data-min-d="{{ '%.4f'|format(min_d) }}"
+     data-max-d="{{ '%.4f'|format(max_d) }}">
+
+    <!-- Distance histogram + range filter -->
+    {% if histogram and histogram.n_total > 0 %}
+    <form method="get" action="/review/pairs/{{ pair.run_id }}"
+          id="filter-form"
+          style="margin-bottom:1rem; padding:0.5rem 0.75rem; background:var(--bg-input); border-radius:var(--radius); border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:0.75rem; font-size:11px;">
+            <span style="color:var(--text-muted);">distance filter</span>
+            <svg id="hist-svg" width="360" height="48" style="background:var(--bg);">
+                {% set hist_min = histogram.min %}
+                {% set hist_max = histogram.max %}
+                {% set hist_span = hist_max - hist_min if (hist_max - hist_min) > 0 else 1 %}
+                {% set max_count = histogram.counts|max %}
+                {% set max_count_safe = max_count if max_count > 0 else 1 %}
+                {% set bar_w = 360 / histogram.counts|length %}
+                {% for c in histogram.counts %}
+                    {% set bar_h = (c / max_count_safe) * 40 %}
+                    {% set x = loop.index0 * bar_w %}
+                    {% set y = 44 - bar_h %}
+                    {% set bin_low = histogram.bins[loop.index0] %}
+                    {% set bin_high = histogram.bins[loop.index] %}
+                    {% set in_range = bin_high >= min_d and bin_low <= max_d %}
+                    <rect x="{{ x }}" y="{{ y }}" width="{{ bar_w - 1 }}" height="{{ bar_h }}"
+                          fill="{% if in_range %}var(--accent){% else %}#555{% endif %}"
+                          opacity="0.9">
+                        <title>{{ '%.3f'|format(bin_low) }} – {{ '%.3f'|format(bin_high) }}: {{ c }} pairs</title>
+                    </rect>
+                {% endfor %}
+                <!-- Current filter range shaded -->
+                {% set min_x = ((min_d - hist_min) / hist_span) * 360 %}
+                {% set max_x = ((max_d - hist_min) / hist_span) * 360 %}
+                <rect x="{{ min_x }}" y="0" width="{{ max_x - min_x }}" height="48"
+                      fill="var(--accent)" opacity="0.08" stroke="var(--accent)" stroke-width="1" stroke-opacity="0.4"/>
+                <text x="2" y="10" fill="var(--text-muted)" font-size="9">{{ '%.2f'|format(hist_min) }}</text>
+                <text x="358" y="10" fill="var(--text-muted)" font-size="9" text-anchor="end">{{ '%.2f'|format(hist_max) }}</text>
+            </svg>
+            <label style="color:var(--text-muted);">min
+                <input type="number" name="min_d" step="0.01" min="0" max="2"
+                       value="{{ '%.3f'|format(min_d) }}"
+                       style="width:55px; padding:2px 4px; background:var(--bg); color:var(--text); border:1px solid var(--border); font-family:inherit; font-size:11px;">
+            </label>
+            <label style="color:var(--text-muted);">max
+                <input type="number" name="max_d" step="0.01" min="0" max="2"
+                       value="{{ '%.3f'|format(max_d) }}"
+                       style="width:55px; padding:2px 4px; background:var(--bg); color:var(--text); border:1px solid var(--border); font-family:inherit; font-size:11px;">
+            </label>
+            <input type="hidden" name="position" value="0">
+            <button class="btn" type="submit" style="padding:2px 10px; font-size:11px;">Apply</button>
+            {% if filter_active %}
+            <a href="/review/pairs/{{ pair.run_id }}" style="color:var(--text-muted); text-decoration:underline; font-size:11px;">clear</a>
+            {% endif %}
+            <span style="color:var(--text-muted); margin-left:auto;">{{ histogram.n_total }} pairs total</span>
+        </div>
+    </form>
+    {% endif %}
 
     <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem; color:var(--text-muted);">
-        <span>pair {{ pair.position + 1 }}/{{ pair.total }}</span>
+        <span>pair {{ view_position + 1 }}/{{ pair.total }}{% if filter_active %} (filtered){% endif %}</span>
         <span>·</span>
         <span>d={{ '%.3f'|format(pair.distance) }}</span>
         {% if pair.same_cluster %}<span style="color:var(--success)">· same cluster</span>{% endif %}
@@ -45,7 +102,7 @@
                  data-lon-a="{{ pair.ann_a.gps_lon_captured or '' }}"
                  data-lat-b="{{ pair.ann_b.gps_lat_captured or '' }}"
                  data-lon-b="{{ pair.ann_b.gps_lon_captured or '' }}">
-                <span style="color:var(--text-muted)">map (Phase 3+)</span>
+                <span style="color:var(--text-muted)">map loading…</span>
             </div>
         </div>
     </div>
@@ -53,28 +110,29 @@
     <div style="display:flex; gap:0.5rem; margin-top:1rem;">
         <button class="btn btn-match" data-shortcut="y"
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "match"}'
+                hx-vals='{"decision": "match", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">✓ Match (Y)</button>
         <button class="btn btn-nomatch" data-shortcut="n"
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "no_match"}'
+                hx-vals='{"decision": "no_match", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">✗ No match (N)</button>
         <button class="btn btn-unsure" data-shortcut="u"
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "unsure"}'
+                hx-vals='{"decision": "unsure", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">? Unsure (U)</button>
         <button class="btn" data-shortcut=" "
                 hx-post="/api/pairs/{{ pair.queue_id }}/decide"
-                hx-vals='{"decision": "skip"}'
+                hx-vals='{"decision": "skip", "min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}"}'
                 hx-target="#pair-card" hx-swap="innerHTML">⏭ Skip (Space)</button>
     </div>
 
     <div style="display:flex; justify-content:space-between; margin-top:1rem; color:var(--text-muted);">
-        {% if pair.position > 0 %}
-        <a href="/review/pairs/{{ pair.run_id }}?position={{ pair.position - 1 }}">← Prev (J)</a>
+        {% set filter_qs %}{% if filter_active %}&min_d={{ '%.4f'|format(min_d) }}&max_d={{ '%.4f'|format(max_d) }}{% endif %}{% endset %}
+        {% if view_position > 0 %}
+        <a href="/review/pairs/{{ pair.run_id }}?position={{ view_position - 1 }}{{ filter_qs }}">← Prev (J)</a>
         {% else %}<span></span>{% endif %}
-        {% if pair.position < pair.total - 1 %}
-        <a href="/review/pairs/{{ pair.run_id }}?position={{ pair.position + 1 }}">Next (K) →</a>
+        {% if view_position < pair.total - 1 %}
+        <a href="/review/pairs/{{ pair.run_id }}?position={{ view_position + 1 }}{{ filter_qs }}">Next (K) →</a>
         {% else %}<span></span>{% endif %}
     </div>
 </div>

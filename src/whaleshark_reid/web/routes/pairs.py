@@ -1,6 +1,8 @@
 """Pair review carousel routes."""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -28,17 +30,34 @@ def carousel(
     request: Request,
     run_id: str,
     position: int = 0,
+    min_d: Optional[float] = None,
+    max_d: Optional[float] = None,
     storage: Storage = Depends(get_storage),
 ):
-    pair = pq_service.get_pair(storage, run_id, position)
+    pair = pq_service.get_pair(storage, run_id, position, min_d=min_d, max_d=max_d)
+    histogram = pq_service.get_distance_histogram(storage, run_id)
     if pair is None:
         return templates.TemplateResponse(
             "partials/empty_queue.html",
-            {"request": request, "run_id": run_id},
+            {
+                "request": request,
+                "run_id": run_id,
+                "histogram": histogram,
+                "min_d": min_d,
+                "max_d": max_d,
+            },
         )
     return templates.TemplateResponse(
         "pairs/carousel.html",
-        {"request": request, "pair": pair},
+        {
+            "request": request,
+            "pair": pair,
+            "histogram": histogram,
+            "min_d": min_d if min_d is not None else histogram["min"],
+            "max_d": max_d if max_d is not None else histogram["max"],
+            "filter_active": min_d is not None or max_d is not None,
+            "view_position": position,  # offset within the filtered subset
+        },
     )
 
 
@@ -48,6 +67,8 @@ def decide(
     queue_id: int,
     decision: str = Form(...),
     notes: str = Form(""),
+    min_d: Optional[float] = Form(None),
+    max_d: Optional[float] = Form(None),
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(get_settings),
 ):
@@ -61,14 +82,37 @@ def decide(
     pq_service.submit_decision(storage, queue_id, decision, settings.user, notes)
 
     next_pair = pq_service.get_next_undecided(
-        storage, run_id=current.run_id, from_position=current.position + 1
+        storage,
+        run_id=current.run_id,
+        from_queue_id=queue_id,
+        min_d=min_d,
+        max_d=max_d,
     )
+    histogram = pq_service.get_distance_histogram(storage, current.run_id)
     if next_pair is None:
         return templates.TemplateResponse(
             "partials/empty_queue.html",
-            {"request": request, "run_id": current.run_id},
+            {
+                "request": request,
+                "run_id": current.run_id,
+                "histogram": histogram,
+                "min_d": min_d,
+                "max_d": max_d,
+            },
         )
+    # Compute the filtered-subset offset for the next pair so the UI counter stays accurate
+    view_position = pq_service.filtered_position_index(
+        storage, current.run_id, next_pair.position, min_d=min_d, max_d=max_d
+    )
     return templates.TemplateResponse(
         "partials/pair_card.html",
-        {"request": request, "pair": next_pair},
+        {
+            "request": request,
+            "pair": next_pair,
+            "histogram": histogram,
+            "min_d": min_d if min_d is not None else histogram["min"],
+            "max_d": max_d if max_d is not None else histogram["max"],
+            "filter_active": min_d is not None or max_d is not None,
+            "view_position": view_position,
+        },
     )
