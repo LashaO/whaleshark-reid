@@ -38,3 +38,31 @@ def annotation_detail(
         "list/annotation_detail.html",
         {"request": request, "ann": ann},
     )
+
+
+@router.get("/list/decisions", response_class=HTMLResponse)
+def decisions_list(request: Request, storage: Storage = Depends(get_storage)):
+    rows = storage.conn.execute(
+        "SELECT * FROM pair_decisions ORDER BY created_at DESC LIMIT 100"
+    ).fetchall()
+    return templates.TemplateResponse(
+        "list/decisions.html",
+        {"request": request, "decisions": [dict(r) for r in rows]},
+    )
+
+
+@router.get("/list/individuals", response_class=HTMLResponse)
+def individuals_list(request: Request, storage: Storage = Depends(get_storage)):
+    rows = storage.conn.execute(
+        """
+        SELECT name_uuid, name, COUNT(*) as member_count
+        FROM annotations
+        WHERE name_uuid IS NOT NULL
+        GROUP BY name_uuid
+        ORDER BY member_count DESC
+        """
+    ).fetchall()
+    return templates.TemplateResponse(
+        "list/individuals.html",
+        {"request": request, "individuals": [dict(r) for r in rows]},
+    )

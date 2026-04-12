@@ -29,6 +29,9 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    from whaleshark_reid.web.routes import home
+    app.include_router(home.router)
+
     from whaleshark_reid.web.routes import image
     app.include_router(image.router)
 
@@ -43,5 +46,8 @@ def create_app() -> FastAPI:
 
     from whaleshark_reid.web.routes import clusters
     app.include_router(clusters.router)
+
+    from whaleshark_reid.web.routes import map as map_router
+    app.include_router(map_router.router)
 
     return app

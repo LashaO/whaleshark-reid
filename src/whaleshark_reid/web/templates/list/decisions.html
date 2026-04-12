@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Decisions{% endblock %}
+{% block content %}
+<h1>Pair Decisions</h1>
+<table>
+    <thead><tr><th>ID</th><th>Ann A</th><th>Ann B</th><th>Decision</th><th>Distance</th><th>User</th><th>Date</th></tr></thead>
+    <tbody>
+    {% for d in decisions %}
+    <tr>
+        <td>{{ d.decision_id }}</td>
+        <td><a href="/annotation/{{ d.ann_a_uuid }}">{{ d.ann_a_uuid[:12] }}…</a></td>
+        <td><a href="/annotation/{{ d.ann_b_uuid }}">{{ d.ann_b_uuid[:12] }}…</a></td>
+        <td>{{ d.decision }}</td>
+        <td>{{ '%.3f'|format(d.distance) if d.distance else '—' }}</td>
+        <td>{{ d.user }}</td>
+        <td>{{ d.created_at }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% if not decisions %}<p style="color:var(--text-muted);">No decisions yet. Start reviewing pairs!</p>{% endif %}
+{% endblock %}
