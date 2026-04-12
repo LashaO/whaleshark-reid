@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Review · {{ pair.run_id }}{% endblock %}
 {% block head_extra %}
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/js/leaflet_inset.js" defer></script>
 <script src="/static/js/carousel.js" defer></script>
 {% endblock %}
 {% block content %}
