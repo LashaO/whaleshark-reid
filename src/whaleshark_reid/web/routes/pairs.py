@@ -84,6 +84,7 @@ def carousel(
     max_km: Optional[str] = None,
     order_by: Optional[str] = None,
     seed: Optional[str] = None,
+    undecided_only: int = 1,
     storage: Storage = Depends(get_storage),
 ):
     min_d = _parse_optional_float(min_d)
@@ -93,6 +94,7 @@ def carousel(
     min_km = _parse_optional_float(min_km)
     max_km = _parse_optional_float(max_km)
     order_by, seed = _resolve_order(order_by, _parse_optional_int(seed))
+    undecided_only_b = bool(undecided_only)
 
     pair = pq_service.get_pair(
         storage, run_id, position,
@@ -100,6 +102,7 @@ def carousel(
         min_td=min_td, max_td=max_td,
         min_km=min_km, max_km=max_km,
         order_by=order_by, seed=seed,
+        undecided_only=undecided_only_b,
     )
     histograms = _build_histograms(storage, run_id)
     filter_active = _filter_active(min_d, max_d, min_td, max_td, min_km, max_km)
@@ -116,6 +119,7 @@ def carousel(
         "order_by": order_by,
         "seed": seed,
         "filter_active": filter_active,
+        "undecided_only": undecided_only_b,
     }
     if pair is None:
         return templates.TemplateResponse("partials/empty_queue.html", ctx)
@@ -139,6 +143,7 @@ def decide(
     max_km: Optional[str] = Form(None),
     order_by: Optional[str] = Form(None),
     seed: Optional[str] = Form(None),
+    undecided_only: Optional[str] = Form(None),
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(get_settings),
 ):
@@ -149,6 +154,9 @@ def decide(
     min_km = _parse_optional_float(min_km)
     max_km = _parse_optional_float(max_km)
     order_by, seed = _resolve_order(order_by, _parse_optional_int(seed))
+    # Treat empty form value / "1" / "true" as on; "0"/"false" as off. Default
+    # on — matches the default in GET /review/pairs/{run_id}.
+    undecided_only_b = (undecided_only or "1").strip().lower() not in ("0", "false", "")
 
     current = pq_service.get_pair_by_id(storage, queue_id)
     if current is None:
@@ -183,6 +191,7 @@ def decide(
         "order_by": order_by,
         "seed": seed,
         "filter_active": filter_active,
+        "undecided_only": undecided_only_b,
     }
     if next_pair is None:
         return templates.TemplateResponse("partials/empty_queue.html", ctx)
@@ -193,6 +202,7 @@ def decide(
         min_td=min_td, max_td=max_td,
         min_km=min_km, max_km=max_km,
         order_by=order_by, seed=seed,
+        undecided_only=undecided_only_b,
     )
     return templates.TemplateResponse(
         "partials/pair_card.html",

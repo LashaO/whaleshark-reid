@@ -65,6 +65,16 @@ def _pair_from_row(row, storage: Storage, total: int) -> PairView:
     )
 
 
+_UNDECIDED_SUBQUERY = (
+    "NOT EXISTS ("
+    " SELECT 1 FROM pair_decisions pd"
+    " WHERE pd.ann_a_uuid = pq.ann_a_uuid AND pd.ann_b_uuid = pq.ann_b_uuid"
+    "   AND pd.decision IN ('match', 'no_match')"
+    "   AND pd.superseded_by IS NULL"
+    ")"
+)
+
+
 def _build_filter_clauses(
     min_d: Optional[float],
     max_d: Optional[float],
@@ -72,6 +82,7 @@ def _build_filter_clauses(
     max_td: Optional[int],
     min_km: Optional[float] = None,
     max_km: Optional[float] = None,
+    undecided_only: bool = False,
 ) -> tuple[str, list]:
     """Build WHERE clauses for pair_queue queries over the pq alias.
 
@@ -81,6 +92,9 @@ def _build_filter_clauses(
 
     When a km/td filter is active, pairs with a NULL in that column (missing
     date or GPS) are excluded — they can't satisfy the range.
+
+    When `undecided_only` is True, pairs with an active match/no_match decision
+    are excluded via a correlated NOT EXISTS on pair_decisions.
     """
     clauses: list[str] = []
     params: list = []
@@ -103,6 +117,8 @@ def _build_filter_clauses(
     if max_km is not None:
         clauses.append("pq.km_delta <= ?")
         params.append(max_km)
+    if undecided_only:
+        clauses.append(_UNDECIDED_SUBQUERY)
 
     where_sql = (" AND " + " AND ".join(clauses)) if clauses else ""
     return where_sql, params
@@ -136,15 +152,20 @@ def get_pair(
     max_km: Optional[float] = None,
     order_by: str = "distance",
     seed: Optional[int] = None,
+    undecided_only: bool = True,
 ) -> Optional[PairView]:
     """Get the pair at position `position` within the filtered+sorted subset.
 
     `position` is an offset into the FILTERED+SORTED queue — position=0 is
     the first pair under the current sort order (lowest distance by default,
     or pseudo-random seeded by `seed` if order_by='random').
+
+    `undecided_only=True` hides pairs with an active match/no_match decision
+    so the active review loop shrinks as you decide. Set to False to revisit
+    decided pairs.
     """
     where_sql, filter_params = _build_filter_clauses(
-        min_d, max_d, min_td, max_td, min_km, max_km
+        min_d, max_d, min_td, max_td, min_km, max_km, undecided_only
     )
     order_key = _order_key_expr(order_by, seed)
 
@@ -274,12 +295,13 @@ def filtered_position_index(
     max_km: Optional[float] = None,
     order_by: str = "distance",
     seed: Optional[int] = None,
+    undecided_only: bool = True,
 ) -> int:
     """Return the 0-indexed offset of the pair with queue_id=target_queue_id
     within the filtered+sorted subset — i.e., how many filtered pairs come
     before it under the current sort order."""
     where_sql, filter_params = _build_filter_clauses(
-        min_d, max_d, min_td, max_td, min_km, max_km
+        min_d, max_d, min_td, max_td, min_km, max_km, undecided_only
     )
     order_key = _order_key_expr(order_by, seed)
     order_key_sub = _order_key_expr(order_by, seed, alias="")

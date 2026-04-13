@@ -47,7 +47,7 @@
      data-max-d="{{ '%.4f'|format(max_d) }}">
 
     <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem; color:var(--text-muted);">
-        <span>pair {{ view_position + 1 }}/{{ pair.total }}{% if filter_active %} (filtered){% endif %}</span>
+        <span>pair {{ view_position + 1 }}/{{ pair.total }}{% if filter_active %} (filtered){% endif %}{% if undecided_only %} · undecided{% endif %}</span>
         <span>·</span>
         <span>d={{ '%.3f'|format(pair.distance) }}</span>
         {% if order_by == 'random' %}<span>· random sort (seed {{ seed }})</span>{% endif %}
@@ -108,7 +108,7 @@
         <span class="lm-stats" style="color:var(--text-muted); margin-left:auto;"></span>
     </div>
 
-    {% set hx_vals_common %}"min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}", "min_td": "{{ min_td if min_td is not none else '' }}", "max_td": "{{ max_td if max_td is not none else '' }}", "min_km": "{{ '%.2f'|format(min_km) if min_km is not none else '' }}", "max_km": "{{ '%.2f'|format(max_km) if max_km is not none else '' }}", "order_by": "{{ order_by }}", "seed": "{{ seed if seed is not none else '' }}"{% endset %}
+    {% set hx_vals_common %}"min_d": "{{ '%.4f'|format(min_d) if filter_active else '' }}", "max_d": "{{ '%.4f'|format(max_d) if filter_active else '' }}", "min_td": "{{ min_td if min_td is not none else '' }}", "max_td": "{{ max_td if max_td is not none else '' }}", "min_km": "{{ '%.2f'|format(min_km) if min_km is not none else '' }}", "max_km": "{{ '%.2f'|format(max_km) if max_km is not none else '' }}", "order_by": "{{ order_by }}", "seed": "{{ seed if seed is not none else '' }}", "undecided_only": "{{ '1' if undecided_only else '0' }}"{% endset %}
 
     <div style="display:flex; gap:0.5rem; margin-top:1rem;">
         <button class="btn btn-match" data-shortcut="y"
@@ -129,7 +129,7 @@
                 hx-target="#pair-card" hx-swap="innerHTML">⏭ Skip (Space)</button>
     </div>
 
-    {% set filter_qs %}{% if filter_active %}&min_d={{ '%.4f'|format(min_d) }}&max_d={{ '%.4f'|format(max_d) }}{% if min_td is not none %}&min_td={{ min_td }}{% endif %}{% if max_td is not none %}&max_td={{ max_td }}{% endif %}{% if min_km is not none %}&min_km={{ '%.2f'|format(min_km) }}{% endif %}{% if max_km is not none %}&max_km={{ '%.2f'|format(max_km) }}{% endif %}{% endif %}{% if order_by == 'random' and seed is not none %}&order_by=random&seed={{ seed }}{% endif %}{% endset %}
+    {% set filter_qs %}{% if filter_active %}&min_d={{ '%.4f'|format(min_d) }}&max_d={{ '%.4f'|format(max_d) }}{% if min_td is not none %}&min_td={{ min_td }}{% endif %}{% if max_td is not none %}&max_td={{ max_td }}{% endif %}{% if min_km is not none %}&min_km={{ '%.2f'|format(min_km) }}{% endif %}{% if max_km is not none %}&max_km={{ '%.2f'|format(max_km) }}{% endif %}{% endif %}{% if order_by == 'random' and seed is not none %}&order_by=random&seed={{ seed }}{% endif %}{% if not undecided_only %}&undecided_only=0{% endif %}{% endset %}
 
     <div style="display:flex; justify-content:space-between; margin-top:1rem; color:var(--text-muted);">
         {% if view_position > 0 %}
@@ -223,9 +223,16 @@
                         <option value="random" {% if order_by == 'random' %}selected{% endif %}>random (reseeds on apply)</option>
                     </select>
                 </label>
+                <label style="color:var(--text-muted);" title="Hide pairs that already have a match/no_match decision">
+                    <input type="checkbox" name="undecided_only" value="1" {% if undecided_only %}checked{% endif %}>
+                    undecided only
+                </label>
+                {# Fallback so an unchecked box still submits a value. Placed AFTER the
+                   checkbox so first-value lookup returns "1" when checked, "0" otherwise. #}
+                <input type="hidden" name="undecided_only" value="0">
                 <input type="hidden" name="position" value="0">
                 <button class="btn" type="submit" style="padding:2px 10px; font-size:11px;">Apply</button>
-                {% if filter_active or order_by == 'random' %}
+                {% if filter_active or order_by == 'random' or not undecided_only %}
                 <a href="/review/pairs/{{ pair.run_id }}" style="color:var(--text-muted); text-decoration:underline; font-size:11px;">clear</a>
                 {% endif %}
                 <span style="color:var(--text-muted); margin-left:auto;">{{ histograms.distance.n_total }} pairs total</span>

@@ -14,6 +14,34 @@ def test_carousel_renders_first_pair(seeded_web_client: TestClient):
     assert "No match" in r.text
 
 
+def test_decided_pairs_are_hidden_by_default(seeded_web_client: TestClient):
+    """After deciding the first pair, it should not reappear in the default
+    (undecided-only) carousel — the total should shrink by one."""
+    import re
+    first = seeded_web_client.get("/review/pairs/r_match")
+    before = int(re.search(r"pair \d+/(\d+)", first.text).group(1))
+    qid = re.search(r'data-queue-id="(\d+)"', first.text).group(1)
+
+    seeded_web_client.post(
+        f"/api/pairs/{qid}/decide",
+        data={"decision": "match"},
+        headers={"HX-Request": "true"},
+    )
+
+    after_default = seeded_web_client.get("/review/pairs/r_match")
+    # Either we're on the next pair and total shrank, or we hit the empty state.
+    if "pair" in after_default.text and "/" in after_default.text:
+        m = re.search(r"pair \d+/(\d+)", after_default.text)
+        if m:
+            assert int(m.group(1)) == before - 1
+
+    # With undecided_only=0, the original total is visible again.
+    show_all = seeded_web_client.get("/review/pairs/r_match?undecided_only=0")
+    m = re.search(r"pair \d+/(\d+)", show_all.text)
+    if m:
+        assert int(m.group(1)) == before
+
+
 def test_submit_decision_returns_next_pair(seeded_web_client: TestClient):
     # Get the first pair to find the queue_id
     page = seeded_web_client.get("/review/pairs/r_match")
