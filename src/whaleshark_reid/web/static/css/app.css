@@ -92,6 +92,12 @@ tr:hover { background: rgba(255,255,255,0.03); }
 
 /* Map inset */
 .map-inset { width: 300px; height: 200px; border-radius: var(--radius); overflow: hidden; position: relative; }
+.map-dot {
+    background: var(--accent, #00adb5);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(0,0,0,0.4);
+}
 
 /* Cluster scatter */
 .scatter-container { width: 100%; height: 500px; }

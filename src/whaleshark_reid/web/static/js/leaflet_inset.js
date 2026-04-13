@@ -47,8 +47,16 @@ function initMapInset() {
   });
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
-  L.marker([latA, lonA]).addTo(map);
-  L.marker([latB, lonB]).addTo(map);
+  // DivIcon markers — pure CSS dots. Avoids vendoring the default leaflet
+  // marker PNG assets (marker-icon*.png, marker-shadow.png) which weren't
+  // included and 404 in this environment.
+  const dotIcon = L.divIcon({
+    className: 'map-dot',
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+  L.marker([latA, lonA], { icon: dotIcon }).addTo(map);
+  L.marker([latB, lonB], { icon: dotIcon }).addTo(map);
   L.polyline([[latA, lonA], [latB, lonB]], { color: '#00adb5', weight: 2 }).addTo(map);
 
   map.fitBounds([[latA, lonA], [latB, lonB]], { padding: [20, 20], animate: false });
