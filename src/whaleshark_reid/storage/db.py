@@ -59,6 +59,27 @@ class Storage:
         if "time_delta_days" not in cols:
             self.conn.execute("ALTER TABLE pair_queue ADD COLUMN time_delta_days REAL")
 
+        # pair_matches table (post-V1 feature)
+        has_pm = self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pair_matches'"
+        ).fetchone()
+        if not has_pm:
+            self.conn.executescript("""
+                CREATE TABLE pair_matches (
+                    queue_id    INTEGER NOT NULL REFERENCES pair_queue(queue_id),
+                    extractor   TEXT    NOT NULL,
+                    n_matches   INTEGER NOT NULL,
+                    mean_score  REAL,
+                    median_score REAL,
+                    match_data  TEXT    NOT NULL,
+                    img_a_size  TEXT    NOT NULL,
+                    img_b_size  TEXT    NOT NULL,
+                    computed_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (queue_id, extractor)
+                );
+                CREATE INDEX idx_pm_queue ON pair_matches(queue_id);
+            """)
+
     def close(self) -> None:
         self.conn.close()
 

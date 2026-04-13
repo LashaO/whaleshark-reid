@@ -94,3 +94,17 @@ CREATE TABLE IF NOT EXISTS pair_queue (
     UNIQUE(run_id, ann_a_uuid, ann_b_uuid)
 );
 CREATE INDEX IF NOT EXISTS idx_pq_run_pos ON pair_queue(run_id, position);
+
+CREATE TABLE IF NOT EXISTS pair_matches (
+    queue_id    INTEGER NOT NULL REFERENCES pair_queue(queue_id),
+    extractor   TEXT    NOT NULL,
+    n_matches   INTEGER NOT NULL,
+    mean_score  REAL,
+    median_score REAL,
+    match_data  TEXT    NOT NULL,
+    img_a_size  TEXT    NOT NULL,
+    img_b_size  TEXT    NOT NULL,
+    computed_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (queue_id, extractor)
+);
+CREATE INDEX IF NOT EXISTS idx_pm_queue ON pair_matches(queue_id);
