@@ -22,10 +22,24 @@ document.addEventListener('keydown', (e) => {
   if (btn) { btn.click(); e.preventDefault(); }
 });
 
-// After every HTMX swap, re-initialize the Leaflet map inset on the new pair card.
-// Without this, the map shows "map loading…" after any decision click.
-document.body.addEventListener('htmx:afterSwap', () => {
-  if (typeof initMapInset === 'function') {
-    initMapInset();
+// Tear down the previous Leaflet map BEFORE htmx replaces the DOM, so we can
+// .remove() it while its container is still attached. After the swap, init a
+// new map on the freshly-mounted #map-inset element. We defer the init one
+// frame so the browser flushes layout first — otherwise Leaflet measures a
+// 0×0 container and the tile pane positions itself relative to the viewport
+// (top-left), spilling out and blocking the pair view.
+document.body.addEventListener('htmx:beforeSwap', (e) => {
+  // Only teardown if the swap will replace the container holding the map.
+  const target = e.detail.target;
+  if (target && target.contains(document.getElementById('map-inset'))) {
+    if (typeof teardownMapInset === 'function') teardownMapInset();
+  }
+});
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  const target = e.detail.target;
+  if (target && target.querySelector('#map-inset')) {
+    if (typeof initMapInset === 'function') {
+      requestAnimationFrame(() => initMapInset());
+    }
   }
 });
