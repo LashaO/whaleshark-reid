@@ -61,28 +61,99 @@ def test_carousel_empty_form_values_do_not_break(seeded_web_client: TestClient):
     assert r.status_code == 200
 
 
-def test_time_delta_filter_sql(tmp_db_path):
-    """Verify _build_filter_clauses generates correct SQL for time-delta filter."""
+def test_filter_clauses_sql(tmp_db_path):
+    """Verify _build_filter_clauses generates correct SQL for all filter types."""
     from whaleshark_reid.web.services.pair_queue import _build_filter_clauses
 
-    # No filters → empty join and where
-    j, w, p = _build_filter_clauses(None, None, None, None)
-    assert j == "" and w == "" and p == []
+    # No filters → empty where
+    w, p = _build_filter_clauses(None, None, None, None)
+    assert w == "" and p == []
 
-    # Only distance → no join
-    j, w, p = _build_filter_clauses(0.1, 0.5, None, None)
-    assert j == ""
+    # Distance only
+    w, p = _build_filter_clauses(0.1, 0.5, None, None)
     assert "pq.distance >= ?" in w and "pq.distance <= ?" in w
     assert p == [0.1, 0.5]
 
-    # Time delta → joins annotations twice, filters on julianday delta
-    j, w, p = _build_filter_clauses(None, None, 7, 30)
-    assert "JOIN annotations a" in j and "JOIN annotations b" in j
-    assert "IS NOT NULL" in w  # null-date exclusion
-    assert "julianday" in w
+    # Time-delta reads pre-computed pq.time_delta_days (no JOIN needed now)
+    w, p = _build_filter_clauses(None, None, 7, 30)
+    assert "pq.time_delta_days >= ?" in w and "pq.time_delta_days <= ?" in w
     assert 7 in p and 30 in p
 
+    # Km-delta reads pq.km_delta directly
+    w, p = _build_filter_clauses(None, None, None, None, min_km=10.0, max_km=500.0)
+    assert "pq.km_delta >= ?" in w and "pq.km_delta <= ?" in w
+    assert p == [10.0, 500.0]
+
     # Combined
-    j, w, p = _build_filter_clauses(0.2, 0.6, 7, None)
-    assert "JOIN annotations a" in j
-    assert p == [0.2, 0.6, 7]
+    w, p = _build_filter_clauses(0.2, 0.6, 7, None, min_km=5.0)
+    assert p == [0.2, 0.6, 7, 5.0]
+
+
+def test_carousel_accepts_km_and_random_params(seeded_web_client: TestClient):
+    """All new params — min_km, max_km, order_by, seed — should be accepted."""
+    r = seeded_web_client.get("/review/pairs/r_match?max_km=10000")
+    assert r.status_code == 200
+    r = seeded_web_client.get("/review/pairs/r_match?order_by=random")
+    assert r.status_code == 200
+    # A random-sort response should advertise a generated seed
+    assert "random sort" in r.text
+    r = seeded_web_client.get("/review/pairs/r_match?order_by=random&seed=42")
+    assert r.status_code == 200
+    assert "seed 42" in r.text
+
+
+def test_haversine_udf_registered(tmp_db_path):
+    """Verify the storage layer registers the haversine_km SQL function."""
+    from whaleshark_reid.storage.db import Storage
+    s = Storage(tmp_db_path)
+    # Same point → 0
+    row = s.conn.execute("SELECT haversine_km(0, 0, 0, 0)").fetchone()
+    assert row[0] == 0.0
+    # Approximate NY → LA ~= 3940 km (order-of-magnitude check)
+    row = s.conn.execute(
+        "SELECT haversine_km(40.7128, -74.0060, 34.0522, -118.2437)"
+    ).fetchone()
+    assert 3900 < row[0] < 4000
+    # NULL propagation
+    row = s.conn.execute("SELECT haversine_km(NULL, 0, 0, 0)").fetchone()
+    assert row[0] is None
+
+
+def test_pair_queue_migration_adds_columns(tmp_db_path):
+    """Fresh init_schema on an empty DB should produce a pair_queue with
+    km_delta and time_delta_days columns."""
+    from whaleshark_reid.storage.db import Storage
+    s = Storage(tmp_db_path)
+    s.init_schema()
+    cols = {r["name"] for r in s.conn.execute("PRAGMA table_info(pair_queue)").fetchall()}
+    assert "km_delta" in cols
+    assert "time_delta_days" in cols
+
+
+def test_histograms_include_km_and_td(tmp_db_path):
+    """The service exposes all three histogram types with expected shape."""
+    from whaleshark_reid.storage.db import Storage
+    from whaleshark_reid.web.services.pair_queue import (
+        get_distance_histogram, get_time_delta_histogram, get_km_delta_histogram,
+    )
+    s = Storage(tmp_db_path)
+    s.init_schema()
+    # Empty run → histogram with n_total=0 but consistent shape
+    for fn in (get_distance_histogram, get_time_delta_histogram, get_km_delta_histogram):
+        h = fn(s, "nonexistent_run")
+        assert set(["bins", "counts", "min", "max", "n_total"]).issubset(h.keys())
+        assert h["n_total"] == 0
+    # km/td histograms also carry n_missing
+    assert "n_missing" in get_time_delta_histogram(s, "nonexistent_run")
+    assert "n_missing" in get_km_delta_histogram(s, "nonexistent_run")
+
+
+def test_order_key_random_vs_distance():
+    from whaleshark_reid.web.services.pair_queue import _order_key_expr
+
+    assert _order_key_expr("distance", None) == "pq.position"
+    assert _order_key_expr("distance", 42) == "pq.position"  # seed ignored for distance
+    assert _order_key_expr("random", 42) == "((pq.queue_id * 42) % 1000003)"
+    assert _order_key_expr("random", 42, alias="") == "((queue_id * 42) % 1000003)"
+    # random without a seed falls back to distance ordering (seed required)
+    assert _order_key_expr("random", None) == "pq.position"

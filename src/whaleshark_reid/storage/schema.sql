@@ -88,6 +88,9 @@ CREATE TABLE IF NOT EXISTS pair_queue (
     cluster_b INTEGER,
     same_cluster INTEGER NOT NULL DEFAULT 0,
     position INTEGER NOT NULL,
+    -- Pre-computed pair geometry (nullable: both annotations must have date/GPS)
+    km_delta REAL,
+    time_delta_days REAL,
     UNIQUE(run_id, ann_a_uuid, ann_b_uuid)
 );
 CREATE INDEX IF NOT EXISTS idx_pq_run_pos ON pair_queue(run_id, position);

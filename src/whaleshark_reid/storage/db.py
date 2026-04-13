@@ -8,12 +8,25 @@ connection management + schema initialization only.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 SCHEMA_SQL_PATH = Path(__file__).parent / "schema.sql"
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Great-circle distance in km. Returns NULL if any input is NULL."""
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        return None
+    r1 = math.radians(lat1)
+    r2 = math.radians(lat2)
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(r1) * math.cos(r2) * math.sin(dlon / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(a))
 
 
 class Storage:
@@ -25,10 +38,26 @@ class Storage:
         self.conn.execute("PRAGMA journal_mode = WAL;")
         self.conn.execute("PRAGMA busy_timeout = 5000;")
         self.conn.execute("PRAGMA foreign_keys = ON;")
+        # Register pure-Python UDFs for geometry calculations used by the pair
+        # queue (haversine for km_delta). SQLite has no trig functions built in.
+        self.conn.create_function("haversine_km", 4, _haversine_km, deterministic=True)
 
     def init_schema(self) -> None:
         with open(SCHEMA_SQL_PATH) as f:
             self.conn.executescript(f.read())
+        self._apply_migrations()
+
+    def _apply_migrations(self) -> None:
+        """Additive column migrations for tables that may pre-date newer columns.
+
+        SQLite's CREATE TABLE IF NOT EXISTS is a no-op on existing tables, so
+        any column added after initial release must be applied here.
+        """
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(pair_queue)").fetchall()}
+        if "km_delta" not in cols:
+            self.conn.execute("ALTER TABLE pair_queue ADD COLUMN km_delta REAL")
+        if "time_delta_days" not in cols:
+            self.conn.execute("ALTER TABLE pair_queue ADD COLUMN time_delta_days REAL")
 
     def close(self) -> None:
         self.conn.close()
@@ -235,6 +264,9 @@ class Storage:
         ann_a_uuid, ann_b_uuid, distance, cluster_a, cluster_b, same_cluster.
         Position is assigned by enumeration order.
 
+        Also populates pair geometry columns (km_delta, time_delta_days) by
+        joining annotations. Rows with missing date/GPS get NULLs.
+
         Wrapped in a transaction for atomicity.
         """
         with self.transaction():
@@ -258,3 +290,33 @@ class Storage:
                         position,
                     ),
                 )
+            self.recompute_pair_geometry(run_id)
+
+    def recompute_pair_geometry(self, run_id: str) -> None:
+        """Populate km_delta + time_delta_days from annotations for this run.
+
+        Idempotent; call after inserts or to backfill existing rows that
+        pre-date these columns. NULLs where either side lacks date/GPS.
+        """
+        self.conn.execute(
+            """
+            UPDATE pair_queue SET
+                km_delta = (
+                    SELECT haversine_km(a.gps_lat_captured, a.gps_lon_captured,
+                                        b.gps_lat_captured, b.gps_lon_captured)
+                    FROM annotations a, annotations b
+                    WHERE a.annotation_uuid = pair_queue.ann_a_uuid
+                      AND b.annotation_uuid = pair_queue.ann_b_uuid
+                ),
+                time_delta_days = (
+                    SELECT ABS(julianday(a.date_captured) - julianday(b.date_captured))
+                    FROM annotations a, annotations b
+                    WHERE a.annotation_uuid = pair_queue.ann_a_uuid
+                      AND b.annotation_uuid = pair_queue.ann_b_uuid
+                      AND a.date_captured IS NOT NULL
+                      AND b.date_captured IS NOT NULL
+                )
+            WHERE run_id = ?
+            """,
+            (run_id,),
+        )

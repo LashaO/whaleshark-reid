@@ -70,19 +70,18 @@ def _build_filter_clauses(
     max_d: Optional[float],
     min_td: Optional[int],
     max_td: Optional[int],
-) -> tuple[str, str, list]:
-    """Build filter clauses for pair_queue queries.
+    min_km: Optional[float] = None,
+    max_km: Optional[float] = None,
+) -> tuple[str, list]:
+    """Build WHERE clauses for pair_queue queries over the pq alias.
 
-    Returns (join_sql, where_sql, params) where:
-      - join_sql: JOIN clauses to append to FROM (empty if no time-delta filter)
-      - where_sql: " AND ..." fragment to append to WHERE (empty if no filters)
-      - params: values to bind
+    Returns (where_sql, params) where where_sql is a " AND ..." fragment (or
+    empty). All columns referenced are on pair_queue directly — km_delta and
+    time_delta_days are pre-computed at insert / migration time, so no JOINs.
 
-    Time-delta filters (min_td/max_td, in days) require joining the annotations
-    table twice to access each side's date_captured. Pairs where either
-    annotation has a null date are excluded when the time-delta filter is active.
+    When a km/td filter is active, pairs with a NULL in that column (missing
+    date or GPS) are excluded — they can't satisfy the range.
     """
-    joins: list[str] = []
     clauses: list[str] = []
     params: list = []
 
@@ -92,23 +91,37 @@ def _build_filter_clauses(
     if max_d is not None:
         clauses.append("pq.distance <= ?")
         params.append(max_d)
+    if min_td is not None:
+        clauses.append("pq.time_delta_days >= ?")
+        params.append(min_td)
+    if max_td is not None:
+        clauses.append("pq.time_delta_days <= ?")
+        params.append(max_td)
+    if min_km is not None:
+        clauses.append("pq.km_delta >= ?")
+        params.append(min_km)
+    if max_km is not None:
+        clauses.append("pq.km_delta <= ?")
+        params.append(max_km)
 
-    time_filter_active = min_td is not None or max_td is not None
-    if time_filter_active:
-        joins.append("JOIN annotations a ON a.annotation_uuid = pq.ann_a_uuid")
-        joins.append("JOIN annotations b ON b.annotation_uuid = pq.ann_b_uuid")
-        # Exclude pairs with any null date when filter is active
-        clauses.append("a.date_captured IS NOT NULL AND b.date_captured IS NOT NULL")
-        if min_td is not None:
-            clauses.append("ABS(julianday(a.date_captured) - julianday(b.date_captured)) >= ?")
-            params.append(min_td)
-        if max_td is not None:
-            clauses.append("ABS(julianday(a.date_captured) - julianday(b.date_captured)) <= ?")
-            params.append(max_td)
-
-    join_sql = (" " + " ".join(joins)) if joins else ""
     where_sql = (" AND " + " AND ".join(clauses)) if clauses else ""
-    return join_sql, where_sql, params
+    return where_sql, params
+
+
+def _order_key_expr(order_by: str, seed: Optional[int], alias: str = "pq") -> str:
+    """Return a SQL expression for the sort key of a pair_queue row.
+
+    'distance' → pq.position (already sorted by ascending distance).
+    'random'   → deterministic pseudo-random from queue_id × seed so
+                 pagination is stable across swaps within a session.
+
+    `alias` prefixes the queue_id column (use '' for subqueries against
+    pair_queue directly with no alias).
+    """
+    prefix = f"{alias}." if alias else ""
+    if order_by == "random" and seed is not None:
+        return f"(({prefix}queue_id * {int(seed)}) % 1000003)"
+    return f"{prefix}position"
 
 
 def get_pair(
@@ -119,17 +132,24 @@ def get_pair(
     max_d: Optional[float] = None,
     min_td: Optional[int] = None,
     max_td: Optional[int] = None,
+    min_km: Optional[float] = None,
+    max_km: Optional[float] = None,
+    order_by: str = "distance",
+    seed: Optional[int] = None,
 ) -> Optional[PairView]:
-    """Get the pair at position `position` within the filtered subset.
+    """Get the pair at position `position` within the filtered+sorted subset.
 
-    When filters are set, position is an offset into the FILTERED queue, not
-    the full queue — so position=0 is the lowest-distance pair within the filter range.
+    `position` is an offset into the FILTERED+SORTED queue — position=0 is
+    the first pair under the current sort order (lowest distance by default,
+    or pseudo-random seeded by `seed` if order_by='random').
     """
-    join_sql, where_sql, filter_params = _build_filter_clauses(min_d, max_d, min_td, max_td)
+    where_sql, filter_params = _build_filter_clauses(
+        min_d, max_d, min_td, max_td, min_km, max_km
+    )
+    order_key = _order_key_expr(order_by, seed)
 
-    # Count pairs in the filtered view
     total = storage.conn.execute(
-        f"SELECT COUNT(*) FROM pair_queue pq{join_sql} WHERE pq.run_id = ?{where_sql}",
+        f"SELECT COUNT(*) FROM pair_queue pq WHERE pq.run_id = ?{where_sql}",
         [run_id, *filter_params],
     ).fetchone()[0]
     if total == 0:
@@ -137,9 +157,9 @@ def get_pair(
 
     row = storage.conn.execute(
         f"""
-        SELECT pq.* FROM pair_queue pq{join_sql}
+        SELECT pq.* FROM pair_queue pq
         WHERE pq.run_id = ?{where_sql}
-        ORDER BY pq.position ASC
+        ORDER BY {order_key} ASC
         LIMIT 1 OFFSET ?
         """,
         [run_id, *filter_params, position],
@@ -189,37 +209,43 @@ def get_next_undecided(
     max_d: Optional[float] = None,
     min_td: Optional[int] = None,
     max_td: Optional[int] = None,
+    min_km: Optional[float] = None,
+    max_km: Optional[float] = None,
+    order_by: str = "distance",
+    seed: Optional[int] = None,
 ) -> Optional[PairView]:
-    """Return the next pair (by position) within the filter range whose pair has
-    no active match/no_match decision. `from_queue_id` is the queue_id we're
-    advancing past — the next pair must have position > that queue's position."""
-    # Resolve the position of from_queue_id so we can skip past it
-    current = storage.conn.execute(
-        "SELECT position FROM pair_queue WHERE queue_id = ?", (from_queue_id,)
-    ).fetchone()
-    from_position = current["position"] if current else -1
-
-    join_sql, where_sql, filter_params = _build_filter_clauses(min_d, max_d, min_td, max_td)
+    """Return the next pair (by current sort order) within the filter range
+    whose pair has no active match/no_match decision. `from_queue_id` is the
+    queue_id we're advancing past — the next pair must sort after it."""
+    where_sql, filter_params = _build_filter_clauses(
+        min_d, max_d, min_td, max_td, min_km, max_km
+    )
+    order_key = _order_key_expr(order_by, seed)
+    # Subquery reads the sort key for from_queue_id from a plain pair_queue scan
+    order_key_sub = _order_key_expr(order_by, seed, alias="")
 
     total = storage.conn.execute(
-        f"SELECT COUNT(*) FROM pair_queue pq{join_sql} WHERE pq.run_id = ?{where_sql}",
+        f"SELECT COUNT(*) FROM pair_queue pq WHERE pq.run_id = ?{where_sql}",
         [run_id, *filter_params],
     ).fetchone()[0]
 
     row = storage.conn.execute(
         f"""
-        SELECT pq.* FROM pair_queue pq{join_sql}
-        WHERE pq.run_id = ? AND pq.position > ?{where_sql}
+        SELECT pq.* FROM pair_queue pq
+        WHERE pq.run_id = ? AND {order_key} > COALESCE(
+            (SELECT {order_key_sub} FROM pair_queue WHERE queue_id = ?),
+            -1
+        ){where_sql}
         AND NOT EXISTS (
             SELECT 1 FROM pair_decisions pd
             WHERE pd.ann_a_uuid = pq.ann_a_uuid AND pd.ann_b_uuid = pq.ann_b_uuid
             AND pd.decision IN ('match', 'no_match')
             AND pd.superseded_by IS NULL
         )
-        ORDER BY pq.position ASC
+        ORDER BY {order_key} ASC
         LIMIT 1
         """,
-        [run_id, from_position, *filter_params],
+        [run_id, from_queue_id, *filter_params],
     ).fetchone()
     if row is None:
         return None
@@ -229,64 +255,96 @@ def get_next_undecided(
 def filtered_position_index(
     storage: Storage,
     run_id: str,
-    pair_position: int,
+    target_queue_id: int,
     min_d: Optional[float] = None,
     max_d: Optional[float] = None,
     min_td: Optional[int] = None,
     max_td: Optional[int] = None,
+    min_km: Optional[float] = None,
+    max_km: Optional[float] = None,
+    order_by: str = "distance",
+    seed: Optional[int] = None,
 ) -> int:
-    """Return the 0-indexed offset of the pair at `pair_position` (the raw pair_queue.position)
-    within the filtered subset. I.e., how many filtered pairs come before it."""
-    join_sql, where_sql, filter_params = _build_filter_clauses(min_d, max_d, min_td, max_td)
+    """Return the 0-indexed offset of the pair with queue_id=target_queue_id
+    within the filtered+sorted subset — i.e., how many filtered pairs come
+    before it under the current sort order."""
+    where_sql, filter_params = _build_filter_clauses(
+        min_d, max_d, min_td, max_td, min_km, max_km
+    )
+    order_key = _order_key_expr(order_by, seed)
+    order_key_sub = _order_key_expr(order_by, seed, alias="")
     row = storage.conn.execute(
-        f"SELECT COUNT(*) FROM pair_queue pq{join_sql} "
-        f"WHERE pq.run_id = ? AND pq.position < ?{where_sql}",
-        [run_id, pair_position, *filter_params],
+        f"""
+        SELECT COUNT(*) FROM pair_queue pq
+        WHERE pq.run_id = ? AND {order_key} < (
+            SELECT {order_key_sub} FROM pair_queue WHERE queue_id = ?
+        ){where_sql}
+        """,
+        [run_id, target_queue_id, *filter_params],
     ).fetchone()
     return row[0]
 
 
-def get_distance_histogram(
-    storage: Storage, run_id: str, n_bins: int = 20
-) -> dict:
-    """Return histogram of pair distances for the given matching run.
-
-    Returns {
-        "bins": [edge_0, edge_1, ..., edge_n],  # n+1 edges for n bins
-        "counts": [count_0, ..., count_n-1],
-        "min": float,
-        "max": float,
-        "n_total": int,
-    }
-    """
-    rows = storage.conn.execute(
-        "SELECT distance FROM pair_queue WHERE run_id = ? ORDER BY distance",
-        (run_id,),
-    ).fetchall()
-    distances = [r["distance"] for r in rows]
-    n_total = len(distances)
-
+def _histogram_from_values(values: list[float], n_bins: int = 20) -> dict:
+    n_total = len(values)
     if n_total == 0:
-        return {"bins": [0.0, 2.0], "counts": [0], "min": 0.0, "max": 0.0, "n_total": 0}
-
-    dmin = min(distances)
-    dmax = max(distances)
-    # Pad so first/last bins aren't empty
-    span = max(dmax - dmin, 1e-6)
-    edges = [dmin + (span * i / n_bins) for i in range(n_bins + 1)]
+        return {"bins": [0.0, 1.0], "counts": [0], "min": 0.0, "max": 0.0, "n_total": 0}
+    vmin = min(values)
+    vmax = max(values)
+    span = max(vmax - vmin, 1e-6)
+    edges = [vmin + (span * i / n_bins) for i in range(n_bins + 1)]
     counts = [0] * n_bins
-    for d in distances:
-        # Bin index
-        if d >= dmax:
+    for v in values:
+        if v >= vmax:
             idx = n_bins - 1
         else:
-            idx = int((d - dmin) / span * n_bins)
+            idx = int((v - vmin) / span * n_bins)
             idx = max(0, min(idx, n_bins - 1))
         counts[idx] += 1
     return {
         "bins": edges,
         "counts": counts,
-        "min": dmin,
-        "max": dmax,
+        "min": vmin,
+        "max": vmax,
         "n_total": n_total,
     }
+
+
+def get_distance_histogram(storage: Storage, run_id: str, n_bins: int = 20) -> dict:
+    """Histogram of pair embedding distances for the given matching run."""
+    rows = storage.conn.execute(
+        "SELECT distance FROM pair_queue WHERE run_id = ?", (run_id,)
+    ).fetchall()
+    return _histogram_from_values([r["distance"] for r in rows], n_bins)
+
+
+def get_time_delta_histogram(storage: Storage, run_id: str, n_bins: int = 20) -> dict:
+    """Histogram of |Δdate| in days across pairs in the run. Pairs with a NULL
+    time_delta_days (missing date on either side) are excluded from the histogram
+    but still counted in n_missing so the UI can disclose them."""
+    rows = storage.conn.execute(
+        "SELECT time_delta_days FROM pair_queue WHERE run_id = ? AND time_delta_days IS NOT NULL",
+        (run_id,),
+    ).fetchall()
+    hist = _histogram_from_values([r["time_delta_days"] for r in rows], n_bins)
+    total_rows = storage.conn.execute(
+        "SELECT COUNT(*) FROM pair_queue WHERE run_id = ?", (run_id,)
+    ).fetchone()[0]
+    hist["n_missing"] = total_rows - hist["n_total"]
+    return hist
+
+
+def get_km_delta_histogram(storage: Storage, run_id: str, n_bins: int = 20) -> dict:
+    """Histogram of Δkm between pair GPS coordinates across the run. Pairs with
+    a NULL km_delta (missing GPS on either side) are excluded but counted as
+    n_missing."""
+    rows = storage.conn.execute(
+        "SELECT km_delta FROM pair_queue WHERE run_id = ? AND km_delta IS NOT NULL",
+        (run_id,),
+    ).fetchall()
+    hist = _histogram_from_values([r["km_delta"] for r in rows], n_bins)
+    total_rows = storage.conn.execute(
+        "SELECT COUNT(*) FROM pair_queue WHERE run_id = ?", (run_id,)
+    ).fetchone()[0]
+    hist["n_missing"] = total_rows - hist["n_total"]
+    return hist
