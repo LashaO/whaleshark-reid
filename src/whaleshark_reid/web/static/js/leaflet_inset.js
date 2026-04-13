@@ -28,6 +28,14 @@ function initMapInset() {
   const latB = parseFloat(el.dataset.latB);
   const lonB = parseFloat(el.dataset.lonB);
 
+  // CRITICAL: force position:relative + overflow:hidden as INLINE styles
+  // before L.map() runs. Without a positioned ancestor, Leaflet's
+  // absolutely-positioned panes anchor to the viewport and tile images
+  // render at (0,0) of the screen — covering the pair view.
+  // Inline styles beat any cached/missing CSS rules.
+  el.style.position = 'relative';
+  el.style.overflow = 'hidden';
+
   // Clear placeholder content
   el.innerHTML = '';
 
