@@ -97,31 +97,29 @@ class LocalMatcher:
             feats = self.extractor.extract(img)
         return feats, img.shape[-1], img.shape[-2]  # width, height
 
+    def _match_prebuilt(self, feats_a, feats_b, size_a, size_b) -> MatchResult:
+        with self._torch.inference_mode():
+            out = self.matcher({"image0": feats_a, "image1": feats_b})
+        fa, fb, out = [self._rbd(x) for x in (feats_a, feats_b, out)]
+
+        kpts_a = fa["keypoints"].cpu().tolist()
+        kpts_b = fb["keypoints"].cpu().tolist()
+        pairs_ij = out["matches"].cpu().tolist()
+        scores = out["scores"].cpu().tolist()
+        matches = [[int(i), int(j), float(s)] for (i, j), s in zip(pairs_ij, scores)]
+        mean, median = self._statsf(scores)
+        return MatchResult(
+            extractor=self.extractor_name, n_matches=count_confident_matches(matches, 0.5),
+            mean_score=mean, median_score=median,
+            kpts_a=kpts_a, kpts_b=kpts_b, matches=matches,
+            img_a_size=[int(size_a[0]), int(size_a[1])],
+            img_b_size=[int(size_b[0]), int(size_b[1])],
+        )
+
     def match_pair(self, img_a_path: str, img_b_path: str) -> MatchResult:
         feats_a, wa, ha = self._extract(img_a_path)
         feats_b, wb, hb = self._extract(img_b_path)
-        with self._torch.inference_mode():
-            out = self.matcher({"image0": feats_a, "image1": feats_b})
-        feats_a, feats_b, out = [self._rbd(x) for x in (feats_a, feats_b, out)]
-
-        kpts_a = feats_a["keypoints"].cpu().tolist()
-        kpts_b = feats_b["keypoints"].cpu().tolist()
-        pairs = out["matches"].cpu().tolist()          # list of [i, j]
-        scores = out["scores"].cpu().tolist()          # list of float
-
-        matches = [[int(i), int(j), float(s)] for (i, j), s in zip(pairs, scores)]
-        mean, median = self._statsf(scores)
-        return MatchResult(
-            extractor=self.extractor_name,
-            n_matches=count_confident_matches(matches, thr=0.5),
-            mean_score=mean,
-            median_score=median,
-            kpts_a=kpts_a,
-            kpts_b=kpts_b,
-            matches=matches,
-            img_a_size=[int(wa), int(ha)],
-            img_b_size=[int(wb), int(hb)],
-        )
+        return self._match_prebuilt(feats_a, feats_b, (wa, ha), (wb, hb))
 
 
 def _build_matcher(extractor: str) -> LocalMatcher:
@@ -136,3 +134,32 @@ def get_matcher(extractor: str = "aliked") -> LocalMatcher:
 
 def match_pair(img_a_path: str, img_b_path: str, extractor: str = "aliked") -> MatchResult:
     return get_matcher(extractor).match_pair(img_a_path, img_b_path)
+
+
+def extract_features_batch(
+    image_paths: list[str], extractor: str = "aliked",
+) -> dict[str, tuple[object, tuple[int, int]]]:
+    """Extract features once per unique path.
+
+    Returns mapping path -> (feats, (w, h)).
+    """
+    m = get_matcher(extractor)
+    out: dict[str, tuple[object, tuple[int, int]]] = {}
+    for path in set(image_paths):
+        feats, w, h = m._extract(path)
+        out[path] = (feats, (w, h))
+    return out
+
+
+def match_pairs_batch(
+    pairs: list[tuple[str, str]],
+    feats_by_path: dict[str, tuple[object, tuple[int, int]]],
+    extractor: str = "aliked",
+) -> list[MatchResult]:
+    m = get_matcher(extractor)
+    results: list[MatchResult] = []
+    for a, b in pairs:
+        fa, sa = feats_by_path[a]
+        fb, sb = feats_by_path[b]
+        results.append(m._match_prebuilt(fa, fb, sa, sb))
+    return results

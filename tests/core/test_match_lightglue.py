@@ -82,3 +82,51 @@ def test_get_matcher_caches_per_extractor(monkeypatch):
     assert a1 is a2
     assert a1 is not b1
     assert build_calls == ["aliked", "superpoint"]
+
+
+def test_extract_features_batch_dedupes_by_path(monkeypatch):
+    """Passing repeated paths must only extract each unique path once."""
+    from whaleshark_reid.core.match import lightglue as lg
+    lg._MATCHER_CACHE.clear()
+
+    extract_calls = []
+
+    class FakeMatcher:
+        extractor_name = "aliked"
+        def _extract(self, path):
+            extract_calls.append(path)
+            return {"keypoints": [[1, 2]]}, 440, 440  # feats, w, h
+
+    monkeypatch.setattr(lg, "_build_matcher", lambda e: FakeMatcher())
+    feats_by_path = lg.extract_features_batch(
+        ["a.jpg", "b.jpg", "a.jpg", "b.jpg", "c.jpg"], extractor="aliked",
+    )
+    assert set(feats_by_path.keys()) == {"a.jpg", "b.jpg", "c.jpg"}
+    assert sorted(extract_calls) == ["a.jpg", "b.jpg", "c.jpg"]
+
+
+def test_match_pairs_batch_uses_cached_feats(monkeypatch):
+    from whaleshark_reid.core.match import lightglue as lg
+    lg._MATCHER_CACHE.clear()
+
+    match_calls = []
+
+    class FakeMatcher:
+        extractor_name = "aliked"
+        def _match_prebuilt(self, feats_a, feats_b, size_a, size_b):
+            match_calls.append((feats_a, feats_b))
+            return MatchResult(
+                extractor="aliked", n_matches=3, mean_score=0.7, median_score=0.7,
+                kpts_a=[], kpts_b=[], matches=[[0, 0, 0.9]],
+                img_a_size=list(size_a), img_b_size=list(size_b),
+            )
+
+    monkeypatch.setattr(lg, "_build_matcher", lambda e: FakeMatcher())
+    feats = {"a.jpg": ("FA", (440, 440)), "b.jpg": ("FB", (440, 440))}
+    results = lg.match_pairs_batch(
+        [("a.jpg", "b.jpg"), ("a.jpg", "b.jpg")], feats, extractor="aliked"
+    )
+    assert len(results) == 2
+    assert all(r.n_matches == 3 for r in results)
+    # Each pair triggers one match call (no re-extraction)
+    assert len(match_calls) == 2
