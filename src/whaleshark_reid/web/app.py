@@ -50,4 +50,7 @@ def create_app() -> FastAPI:
     from whaleshark_reid.web.routes import map as map_router
     app.include_router(map_router.router)
 
+    from whaleshark_reid.web.routes import local_match
+    app.include_router(local_match.router)
+
     return app
