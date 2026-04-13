@@ -35,6 +35,9 @@ dev = [
   "pytest-cov",
   "ruff",
 ]
+local-match = [
+  "lightglue @ git+https://github.com/cvg/LightGlue.git",
+]
 
 [project.scripts]
 catalog = "whaleshark_reid.cli.main:app"
@@ -47,4 +50,7 @@ whaleshark_reid = ["storage/schema.sql", "web/templates/**/*.html", "web/static/
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra -q"
+markers = [
+    "lightglue: tests that require the real LightGlue install (skipped by default)",
+]
+addopts = "-ra -q -m 'not lightglue'"
