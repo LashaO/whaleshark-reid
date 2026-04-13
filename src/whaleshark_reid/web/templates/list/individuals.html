@@ -2,17 +2,18 @@
 {% block title %}Individuals{% endblock %}
 {% block content %}
 <h1>Derived Individuals</h1>
+<p style="color:var(--text-muted);">{{ individuals|length }} individuals derived from confirmed matches.</p>
 <table>
     <thead><tr><th>Name UUID</th><th>Name</th><th>Members</th></tr></thead>
     <tbody>
     {% for ind in individuals %}
     <tr>
-        <td>{{ ind.name_uuid[:12] }}…</td>
+        <td><a href="/individual/{{ ind.name_uuid }}">{{ ind.name_uuid[:12] }}…</a></td>
         <td>{{ ind.name or '—' }}</td>
         <td>{{ ind.member_count }}</td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
-{% if not individuals %}<p style="color:var(--text-muted);">No individuals derived yet. Review pairs and run <code>catalog rebuild-individuals</code>.</p>{% endif %}
+{% if not individuals %}<p style="color:var(--text-muted);">No individuals derived yet. Confirm matches in the pair review to generate individuals.</p>{% endif %}
 {% endblock %}

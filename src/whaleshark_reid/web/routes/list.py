@@ -66,3 +66,47 @@ def individuals_list(request: Request, storage: Storage = Depends(get_storage)):
         "list/individuals.html",
         {"request": request, "individuals": [dict(r) for r in rows]},
     )
+
+
+@router.get("/individual/{name_uuid}", response_class=HTMLResponse)
+def individual_detail(
+    request: Request,
+    name_uuid: str,
+    storage: Storage = Depends(get_storage),
+):
+    """Show all annotations that make up a single derived individual — with
+    images, metadata, and a multi-point map."""
+    rows = storage.conn.execute(
+        """
+        SELECT * FROM annotations
+        WHERE name_uuid = ?
+        ORDER BY date_captured NULLS LAST, annotation_uuid
+        """,
+        (name_uuid,),
+    ).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Individual not found")
+
+    members = [dict(r) for r in rows]
+    # GPS points for the map. Deduplicate identical coordinates so overlapping
+    # observations don't stack identical markers.
+    gps_points = [
+        {
+            "lat": m["gps_lat_captured"],
+            "lon": m["gps_lon_captured"],
+            "uuid": m["annotation_uuid"],
+            "date": m["date_captured"],
+        }
+        for m in members
+        if m["gps_lat_captured"] is not None and m["gps_lon_captured"] is not None
+    ]
+    return templates.TemplateResponse(
+        "list/individual_detail.html",
+        {
+            "request": request,
+            "name_uuid": name_uuid,
+            "name": members[0]["name"],
+            "members": members,
+            "gps_points": gps_points,
+        },
+    )
