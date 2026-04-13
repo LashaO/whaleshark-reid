@@ -11,7 +11,7 @@ import typer
 
 from whaleshark_reid.core.match import lightglue as lg
 from whaleshark_reid.storage.db import Storage
-from whaleshark_reid.web.services.local_match import read_cached, write_cached
+from whaleshark_reid.web.services.local_match import write_cached
 
 
 def match_local_command(
@@ -39,9 +39,15 @@ def match_local_command(
     if limit > 0:
         rows = rows[:limit]
 
-    # Skip already-cached pairs unless --overwrite
+    # Skip already-cached pairs unless --overwrite. Single query instead of N
+    # per-row lookups — important for large queues.
     if not overwrite:
-        rows = [r for r in rows if read_cached(storage, r["queue_id"], extractor) is None]
+        cached_ids = {
+            r["queue_id"] for r in storage.conn.execute(
+                "SELECT queue_id FROM pair_matches WHERE extractor = ?", (extractor,)
+            ).fetchall()
+        }
+        rows = [r for r in rows if r["queue_id"] not in cached_ids]
 
     if not rows:
         typer.echo("nothing to do")

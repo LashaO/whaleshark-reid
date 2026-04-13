@@ -24,7 +24,7 @@
         const queueId = ctrl.dataset.queueId;
         const extractor = ctrl.dataset.extractor || "aliked";
 
-        const overlay = card.querySelector("#local-match-overlay");
+        const overlay = card.querySelector(".local-match-overlay");
         const chipA = card.querySelector('.chip-wrap[data-chip="a"]');
         const chipB = card.querySelector('.chip-wrap[data-chip="b"]');
         const runBtn = ctrl.querySelector(".lm-run");
@@ -75,14 +75,11 @@
                 r.matches.forEach((m, idx) => {
                     const [i, j, s] = m;
                     if (s < thr) return;
-                    if (state.hidden.has(idx)) {
-                        html += `<line class="hidden" data-idx="${idx}" x1="0" y1="0" x2="0" y2="0"/>`;
-                        return;
-                    }
                     const pa = r.kpts_a[i], pb = r.kpts_b[j];
                     const x1 = boxA.x + pa[0] * sxA, y1 = boxA.y + pa[1] * syA;
                     const x2 = boxB.x + pb[0] * sxB, y2 = boxB.y + pb[1] * syB;
-                    html += `<line data-idx="${idx}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${scoreColor(s)}" stroke-width="1" stroke-opacity="0.9"/>`;
+                    const cls = state.hidden.has(idx) ? "hidden" : "";
+                    html += `<line class="${cls}" data-idx="${idx}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${scoreColor(s)}" stroke-width="1" stroke-opacity="0.9"/>`;
                 });
             }
             if (showKpts) {
@@ -159,6 +156,16 @@
 
         const ro = new ResizeObserver(render);
         ro.observe(card);
+        // HTMX replaces the #pair-card innerHTML on decide; the old .card node
+        // becomes unreachable but the RO would keep it (and its render closure)
+        // pinned. Disconnect before the swap completes.
+        const onBeforeSwap = (e) => {
+            if (!document.body.contains(card) || e.target.contains(card)) {
+                ro.disconnect();
+                document.body.removeEventListener("htmx:beforeSwap", onBeforeSwap);
+            }
+        };
+        document.body.addEventListener("htmx:beforeSwap", onBeforeSwap);
 
         // Hybrid caching: fetch cached result on mount.
         fetch(`/api/pairs/${queueId}/local-match?extractor=${extractor}`).then(async (r) => {

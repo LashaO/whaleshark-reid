@@ -46,6 +46,7 @@ main { padding: 1rem; max-width: 1400px; margin: 0 auto; }
     border-radius: var(--radius);
     padding: 1rem;
     margin-bottom: 1rem;
+    position: relative;
 }
 
 /* Tables */
