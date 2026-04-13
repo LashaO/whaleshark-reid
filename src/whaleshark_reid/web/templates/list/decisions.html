@@ -2,21 +2,79 @@
 {% block title %}Decisions{% endblock %}
 {% block content %}
 <h1>Pair Decisions</h1>
+
+{% set total_all = counts_by_decision.values() | sum %}
+<div style="display:flex; gap:0.5rem; margin-bottom:1rem; font-size:12px; align-items:center; flex-wrap:wrap;">
+    <span style="color:var(--text-muted);">filter:</span>
+    {% for opt, label in [
+        ('all',      'all (' ~ total_all ~ ')'),
+        ('match',    '✓ match (' ~ (counts_by_decision.get('match', 0)) ~ ')'),
+        ('no_match', '✗ no match (' ~ (counts_by_decision.get('no_match', 0)) ~ ')'),
+        ('unsure',   '? unsure (' ~ (counts_by_decision.get('unsure', 0)) ~ ')'),
+        ('skip',     '⏭ skip (' ~ (counts_by_decision.get('skip', 0)) ~ ')'),
+    ] %}
+        {% if opt == filter_decision %}
+            <span style="padding:3px 10px; background:var(--accent); color:#000; border-radius:3px;">{{ label }}</span>
+        {% else %}
+            <a href="/list/decisions?decision={{ opt }}" style="padding:3px 10px; background:var(--bg-input); color:var(--text); border:1px solid var(--border); border-radius:3px; text-decoration:none;">{{ label }}</a>
+        {% endif %}
+    {% endfor %}
+    <span style="color:var(--text-muted); margin-left:auto;">
+        {{ total }} total · page {{ page + 1 }} / {{ n_pages }}
+    </span>
+</div>
+
 <table>
-    <thead><tr><th>ID</th><th>Ann A</th><th>Ann B</th><th>Decision</th><th>Distance</th><th>User</th><th>Date</th></tr></thead>
+    <thead>
+        <tr>
+            <th>Decision</th>
+            <th>Ann A</th>
+            <th>Ann B</th>
+            <th>Distance</th>
+            <th>User</th>
+            <th>When</th>
+        </tr>
+    </thead>
     <tbody>
     {% for d in decisions %}
     <tr>
-        <td>{{ d.decision_id }}</td>
+        <td>
+            {% set badge_color = {
+                'match': 'var(--success, #4caf50)',
+                'no_match': 'var(--danger, #f44336)',
+                'unsure': 'var(--warning, #ff9800)',
+                'skip': 'var(--text-muted)',
+            }.get(d.decision, 'var(--text-muted)') %}
+            <span style="padding:2px 8px; background:{{ badge_color }}; color:#000; border-radius:3px; font-size:11px; font-weight:600;">{{ d.decision }}</span>
+        </td>
         <td><a href="/annotation/{{ d.ann_a_uuid }}">{{ d.ann_a_uuid[:12] }}…</a></td>
         <td><a href="/annotation/{{ d.ann_b_uuid }}">{{ d.ann_b_uuid[:12] }}…</a></td>
-        <td>{{ d.decision }}</td>
-        <td>{{ '%.3f'|format(d.distance) if d.distance else '—' }}</td>
+        <td>{{ '%.3f'|format(d.distance) if d.distance is not none else '—' }}</td>
         <td>{{ d.user }}</td>
-        <td>{{ d.created_at }}</td>
+        <td style="color:var(--text-muted); font-size:11px;">{{ d.created_at[:19].replace('T', ' ') }}</td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
-{% if not decisions %}<p style="color:var(--text-muted);">No decisions yet. Start reviewing pairs!</p>{% endif %}
+
+{% if not decisions %}
+<p style="color:var(--text-muted);">
+    {% if filter_decision != 'all' %}
+        No {{ filter_decision }} decisions yet. <a href="/list/decisions">show all</a>
+    {% else %}
+        No decisions yet. Start reviewing pairs!
+    {% endif %}
+</p>
+{% endif %}
+
+{% if n_pages > 1 %}
+<div style="display:flex; justify-content:space-between; margin-top:1rem; color:var(--text-muted);">
+    {% if page > 0 %}
+        <a href="/list/decisions?decision={{ filter_decision }}&page={{ page - 1 }}">← Prev</a>
+    {% else %}<span></span>{% endif %}
+    {% if page + 1 < n_pages %}
+        <a href="/list/decisions?decision={{ filter_decision }}&page={{ page + 1 }}">Next →</a>
+    {% else %}<span></span>{% endif %}
+</div>
+{% endif %}
 {% endblock %}

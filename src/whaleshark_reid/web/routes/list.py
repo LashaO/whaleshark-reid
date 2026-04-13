@@ -41,13 +41,57 @@ def annotation_detail(
 
 
 @router.get("/list/decisions", response_class=HTMLResponse)
-def decisions_list(request: Request, storage: Storage = Depends(get_storage)):
+def decisions_list(
+    request: Request,
+    page: int = 0,
+    decision: str = "all",
+    storage: Storage = Depends(get_storage),
+):
+    page_size = 50
+    where_parts = ["superseded_by IS NULL"]
+    params: list = []
+    if decision in ("match", "no_match", "unsure", "skip"):
+        where_parts.append("decision = ?")
+        params.append(decision)
+    where_sql = " AND ".join(where_parts)
+
+    total = storage.conn.execute(
+        f"SELECT COUNT(*) FROM pair_decisions WHERE {where_sql}", params
+    ).fetchone()[0]
+
     rows = storage.conn.execute(
-        "SELECT * FROM pair_decisions ORDER BY created_at DESC LIMIT 100"
+        f"""
+        SELECT * FROM pair_decisions
+        WHERE {where_sql}
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+        """,
+        [*params, page_size, page * page_size],
     ).fetchall()
+
+    counts = {
+        r["decision"]: r["n"]
+        for r in storage.conn.execute(
+            """
+            SELECT decision, COUNT(*) as n FROM pair_decisions
+            WHERE superseded_by IS NULL
+            GROUP BY decision
+            """
+        ).fetchall()
+    }
+
     return templates.TemplateResponse(
         "list/decisions.html",
-        {"request": request, "decisions": [dict(r) for r in rows]},
+        {
+            "request": request,
+            "decisions": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "n_pages": max(1, (total + page_size - 1) // page_size),
+            "filter_decision": decision,
+            "counts_by_decision": counts,
+        },
     )
 
 
