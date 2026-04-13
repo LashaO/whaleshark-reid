@@ -113,3 +113,31 @@ tr:hover { background: rgba(255,255,255,0.03); }
     border: 1px solid var(--accent);
     z-index: 1000;
 }
+
+/* Local match overlay */
+.chip-wrap {
+    position: relative;
+    display: inline-block;
+}
+.local-match-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+.local-match-overlay line { pointer-events: auto; cursor: pointer; }
+.local-match-overlay line.hidden { opacity: 0.1; pointer-events: none; }
+.local-match-overlay circle { pointer-events: none; }
+.local-match-controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+    padding: 0.5rem;
+    background: var(--bg-card-alt, rgba(255,255,255,0.02));
+    border-radius: 4px;
+    font-size: 12px;
+}
+.local-match-controls input[type=range] { vertical-align: middle; }
