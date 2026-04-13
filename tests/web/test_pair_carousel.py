@@ -89,6 +89,48 @@ def test_filter_clauses_sql(tmp_db_path):
     assert p == [0.2, 0.6, 7, 5.0]
 
 
+def test_match_decision_assigns_name_uuid(seeded_web_client: TestClient):
+    """Confirming a match should immediately materialize annotations.name_uuid —
+    not wait for a manual CLI rebuild. Regression for the 'confirmed match but
+    no ID assigned' bug."""
+    import re
+
+    page = seeded_web_client.get("/review/pairs/r_match")
+    match = re.search(r'data-queue-id="(\d+)"', page.text)
+    assert match, "no queue_id in carousel"
+    queue_id = int(match.group(1))
+
+    # Find this pair's annotation uuids
+    ann_a = re.search(r'data-annotation-uuid-a="([^"]+)"', page.text).group(1)
+    ann_b = re.search(r'data-annotation-uuid-b="([^"]+)"', page.text).group(1)
+
+    # Before: neither should have a name_uuid
+    from whaleshark_reid.web.dependencies import get_storage
+    storage = get_storage()
+    a_name = storage.conn.execute(
+        "SELECT name_uuid FROM annotations WHERE annotation_uuid = ?", (ann_a,)
+    ).fetchone()["name_uuid"]
+    assert a_name is None
+
+    # Submit match
+    r = seeded_web_client.post(
+        f"/api/pairs/{queue_id}/decide",
+        data={"decision": "match"},
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200
+
+    # After: both annotations should share a newly-minted name_uuid
+    a_after = storage.conn.execute(
+        "SELECT name_uuid FROM annotations WHERE annotation_uuid = ?", (ann_a,)
+    ).fetchone()["name_uuid"]
+    b_after = storage.conn.execute(
+        "SELECT name_uuid FROM annotations WHERE annotation_uuid = ?", (ann_b,)
+    ).fetchone()["name_uuid"]
+    assert a_after is not None, "ann_a should have name_uuid after match"
+    assert a_after == b_after, "both annotations in the pair should share the same name_uuid"
+
+
 def test_carousel_accepts_km_and_random_params(seeded_web_client: TestClient):
     """All new params — min_km, max_km, order_by, seed — should be accepted."""
     r = seeded_web_client.get("/review/pairs/r_match?max_km=10000")

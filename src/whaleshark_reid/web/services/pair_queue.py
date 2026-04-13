@@ -200,6 +200,16 @@ def submit_decision(
         ),
     )
 
+    # Materialize annotations.name_uuid from the new decision graph. Match
+    # decisions add edges (union-find connects a component); no_match/unsure
+    # don't move the identity graph, but rebuild is idempotent + O(n) so we
+    # just run it unconditionally on every decision. Without this, pair_decisions
+    # accumulates without anything ever being surfaced on individual/annotation
+    # views — "confirmed match but no ID assigned" bug.
+    if decision == "match":
+        from whaleshark_reid.core.feedback.unionfind import rebuild_individuals_cache
+        rebuild_individuals_cache(storage)
+
 
 def get_next_undecided(
     storage: Storage,
