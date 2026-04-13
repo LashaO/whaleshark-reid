@@ -96,6 +96,19 @@
 
     <svg class="local-match-overlay" aria-hidden="true"></svg>
 
+    <!-- PairX A/B section: model-internal explanation, rendered server-side -->
+    <div class="pairx-section" data-queue-id="{{ pair.queue_id }}" data-layer="backbone.blocks.3"
+         style="margin-top:1rem; padding:0.5rem; background:var(--bg-card-alt, rgba(255,255,255,0.02)); border-radius:4px;">
+        <div style="display:flex; gap:0.75rem; align-items:center; font-size:12px;">
+            <strong style="color:var(--text-muted);">PairX</strong>
+            <span class="px-status" style="color:var(--text-muted);"></span>
+            <button type="button" class="btn px-run" style="display:none;">🧠 Run PairX</button>
+            <button type="button" class="btn px-rerun" style="display:none;">re-run</button>
+            <span style="color:var(--text-muted); margin-left:auto;">backbone.blocks.3 · k_lines=20 · k_colors=5</span>
+        </div>
+        <div class="px-img-wrap" style="margin-top:0.5rem;"></div>
+    </div>
+
     <div class="local-match-controls" data-queue-id="{{ pair.queue_id }}" data-extractor="aliked">
         <button type="button" class="btn lm-run" style="display:none;">🔍 Run local match</button>
         <span class="lm-status" style="color:var(--text-muted)"></span>
@@ -242,3 +255,4 @@
     {% endif %}
 </div>
 <script src="/static/js/local_match.js?v=2"></script>
+<script src="/static/js/pairx.js?v=1"></script>
