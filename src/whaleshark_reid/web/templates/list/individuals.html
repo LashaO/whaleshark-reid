@@ -4,13 +4,23 @@
 <h1>Derived Individuals</h1>
 <p style="color:var(--text-muted);">{{ individuals|length }} individuals derived from confirmed matches.</p>
 <table>
-    <thead><tr><th>Name UUID</th><th>Name</th><th>Members</th></tr></thead>
+    <thead>
+        <tr>
+            <th>Name UUID</th>
+            <th>Name</th>
+            <th>Members</th>
+            <th title="Largest span between any two sightings (days)">Δt max</th>
+            <th title="Largest km between any two sightings (haversine)">Δkm max</th>
+        </tr>
+    </thead>
     <tbody>
     {% for ind in individuals %}
     <tr>
         <td><a href="/individual/{{ ind.name_uuid }}">{{ ind.name_uuid[:12] }}…</a></td>
         <td>{{ ind.name or '—' }}</td>
         <td>{{ ind.member_count }}</td>
+        <td>{{ ind.max_td_days if ind.max_td_days is not none else '—' }}{% if ind.max_td_days is not none %} d{% endif %}</td>
+        <td>{{ '%.1f'|format(ind.max_km) if ind.max_km is not none else '—' }}{% if ind.max_km is not none %} km{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody>

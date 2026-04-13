@@ -97,18 +97,51 @@ def decisions_list(
 
 @router.get("/list/individuals", response_class=HTMLResponse)
 def individuals_list(request: Request, storage: Storage = Depends(get_storage)):
-    rows = storage.conn.execute(
+    # Per-individual stats. Max time spread is cheap (max-min of dates). Max km
+    # spread requires a pairwise self-join — but only within each group, so
+    # cost is O(Σ k_i²) across individuals, tiny for real-world counts.
+    base = storage.conn.execute(
         """
-        SELECT name_uuid, name, COUNT(*) as member_count
+        SELECT
+            name_uuid,
+            MAX(name)                                                   AS name,
+            COUNT(*)                                                    AS member_count,
+            CAST(MAX(julianday(date_captured)) - MIN(julianday(date_captured)) AS INTEGER) AS max_td_days
         FROM annotations
         WHERE name_uuid IS NOT NULL
         GROUP BY name_uuid
-        ORDER BY member_count DESC
         """
     ).fetchall()
+
+    km_spread = {
+        r["name_uuid"]: r["max_km"]
+        for r in storage.conn.execute(
+            """
+            SELECT
+                a.name_uuid,
+                MAX(haversine_km(a.gps_lat_captured, a.gps_lon_captured,
+                                 b.gps_lat_captured, b.gps_lon_captured)) AS max_km
+            FROM annotations a
+            JOIN annotations b
+              ON a.name_uuid = b.name_uuid
+             AND a.annotation_uuid < b.annotation_uuid
+            WHERE a.name_uuid IS NOT NULL
+            GROUP BY a.name_uuid
+            """
+        ).fetchall()
+    }
+
+    individuals = []
+    for r in base:
+        d = dict(r)
+        d["max_km"] = km_spread.get(d["name_uuid"])
+        individuals.append(d)
+    # Primary sort: member count desc. Secondary: max_td_days desc (interesting resightings first).
+    individuals.sort(key=lambda d: (d["member_count"], d["max_td_days"] or 0), reverse=True)
+
     return templates.TemplateResponse(
         "list/individuals.html",
-        {"request": request, "individuals": [dict(r) for r in rows]},
+        {"request": request, "individuals": individuals},
     )
 
 
