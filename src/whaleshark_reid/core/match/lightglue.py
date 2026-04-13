@@ -91,8 +91,39 @@ class LocalMatcher:
         median = xs[len(xs) // 2] if len(xs) % 2 else 0.5 * (xs[len(xs) // 2 - 1] + xs[len(xs) // 2])
         return float(mean), float(median)
 
-    def _extract(self, img_path: str):
-        img = self._load_image(img_path, resize=440).to(self.device)
+    def _load_chip_tensor(self, file_path: str, bbox, theta: float):
+        """Load the same bbox+theta chip the UI shows, as a LightGlue-ready tensor.
+
+        Without this, we'd run the extractor on the full source image (often
+        multi-subject, 2k+ px) but plot keypoints over the displayed chip —
+        coordinates and features would both be wrong.
+        """
+        import numpy as np
+        from PIL import Image
+        from wbia_miew_id.datasets.helpers import get_chip_from_img
+
+        img = Image.open(file_path).convert("RGB")
+        arr = np.array(img)
+        if bbox:
+            chip = get_chip_from_img(arr, list(bbox), float(theta or 0.0))
+        else:
+            chip = arr
+        # HWC uint8 → CHW float [0,1]
+        t = self._torch.from_numpy(chip.astype(np.float32) / 255.0).permute(2, 0, 1)
+        # Match `lightglue.load_image(resize=440)`: longer side → 440, keep aspect.
+        h, w = t.shape[-2:]
+        scale = 440 / max(h, w)
+        new_h, new_w = int(round(h * scale)), int(round(w * scale))
+        t = self._torch.nn.functional.interpolate(
+            t.unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False
+        )[0]
+        return t.to(self.device)
+
+    def _extract(self, img_path: str, bbox=None, theta: float = 0.0):
+        if bbox is None:
+            img = self._load_image(img_path, resize=440).to(self.device)
+        else:
+            img = self._load_chip_tensor(img_path, bbox, theta)
         with self._torch.inference_mode():
             feats = self.extractor.extract(img)
         return feats, img.shape[-1], img.shape[-2]  # width, height
@@ -116,9 +147,17 @@ class LocalMatcher:
             img_b_size=[int(size_b[0]), int(size_b[1])],
         )
 
-    def match_pair(self, img_a_path: str, img_b_path: str) -> MatchResult:
-        feats_a, wa, ha = self._extract(img_a_path)
-        feats_b, wb, hb = self._extract(img_b_path)
+    def match_pair(
+        self,
+        img_a_path: str,
+        img_b_path: str,
+        bbox_a=None,
+        theta_a: float = 0.0,
+        bbox_b=None,
+        theta_b: float = 0.0,
+    ) -> MatchResult:
+        feats_a, wa, ha = self._extract(img_a_path, bbox_a, theta_a)
+        feats_b, wb, hb = self._extract(img_b_path, bbox_b, theta_b)
         return self._match_prebuilt(feats_a, feats_b, (wa, ha), (wb, hb))
 
 
@@ -132,34 +171,64 @@ def get_matcher(extractor: str = "aliked") -> LocalMatcher:
     return _MATCHER_CACHE[extractor]
 
 
-def match_pair(img_a_path: str, img_b_path: str, extractor: str = "aliked") -> MatchResult:
-    return get_matcher(extractor).match_pair(img_a_path, img_b_path)
+def match_pair(
+    img_a_path: str,
+    img_b_path: str,
+    extractor: str = "aliked",
+    bbox_a=None,
+    theta_a: float = 0.0,
+    bbox_b=None,
+    theta_b: float = 0.0,
+) -> MatchResult:
+    return get_matcher(extractor).match_pair(
+        img_a_path, img_b_path,
+        bbox_a=bbox_a, theta_a=theta_a, bbox_b=bbox_b, theta_b=theta_b,
+    )
+
+
+# A chip spec is identified by a caller-chosen key (typically an annotation UUID)
+# and produces a distinct extraction from the same source file — two annotations
+# on one image get their own features.
+#   ChipSpec = (key, file_path, bbox_xywh_list_or_None, theta_float)
 
 
 def extract_features_batch(
-    image_paths: list[str], extractor: str = "aliked",
+    specs: list[tuple[str, str, object, float]] | list[str],
+    extractor: str = "aliked",
 ) -> dict[str, tuple[object, tuple[int, int]]]:
-    """Extract features once per unique path.
+    """Extract features once per unique key.
 
-    Returns mapping path -> (feats, (w, h)).
+    Accepts either a list of `(key, path, bbox, theta)` specs (preferred — the
+    key is whatever identity the caller wants, e.g. annotation UUID) or a bare
+    list of paths (backward compat; key == path, no cropping).
+
+    Returns mapping key -> (feats, (w, h)).
     """
     m = get_matcher(extractor)
     out: dict[str, tuple[object, tuple[int, int]]] = {}
-    for path in set(image_paths):
-        feats, w, h = m._extract(path)
-        out[path] = (feats, (w, h))
+    seen: set[str] = set()
+    for spec in specs:
+        if isinstance(spec, str):
+            key, path, bbox, theta = spec, spec, None, 0.0
+        else:
+            key, path, bbox, theta = spec
+        if key in seen:
+            continue
+        seen.add(key)
+        feats, w, h = m._extract(path, bbox, theta)
+        out[key] = (feats, (w, h))
     return out
 
 
 def match_pairs_batch(
     pairs: list[tuple[str, str]],
-    feats_by_path: dict[str, tuple[object, tuple[int, int]]],
+    feats_by_key: dict[str, tuple[object, tuple[int, int]]],
     extractor: str = "aliked",
 ) -> list[MatchResult]:
     m = get_matcher(extractor)
     results: list[MatchResult] = []
     for a, b in pairs:
-        fa, sa = feats_by_path[a]
-        fb, sb = feats_by_path[b]
+        fa, sa = feats_by_key[a]
+        fb, sb = feats_by_key[b]
         results.append(m._match_prebuilt(fa, fb, sa, sb))
     return results

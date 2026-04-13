@@ -38,7 +38,7 @@ def post_local_match(
     storage: Storage = Depends(get_storage),
 ):
     try:
-        path_a, path_b = svc.lookup_pair_image_paths(storage, queue_id)
+        spec_a, spec_b = svc.lookup_pair_chip_specs(storage, queue_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="pair not found")
 
@@ -52,6 +52,8 @@ def post_local_match(
     except LightGlueUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    result = matcher.match_pair(path_a, path_b)
+    _, pa, ba, tha = spec_a
+    _, pb, bb, thb = spec_b
+    result = matcher.match_pair(pa, pb, bbox_a=ba, theta_a=tha, bbox_b=bb, theta_b=thb)
     svc.write_cached(storage, queue_id, result)
     return result.to_json_dict()

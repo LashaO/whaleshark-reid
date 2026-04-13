@@ -26,8 +26,12 @@ def match_local_command(
 
     rows = storage.conn.execute(
         """
-        SELECT pq.queue_id, a.file_path AS pa, b.file_path AS pb,
-               pq.ann_a_uuid, pq.ann_b_uuid
+        SELECT
+            pq.queue_id, pq.ann_a_uuid, pq.ann_b_uuid,
+            a.file_path AS pa, a.bbox_x AS ax, a.bbox_y AS ay,
+                a.bbox_w AS aw, a.bbox_h AS ah, a.theta AS ta,
+            b.file_path AS pb, b.bbox_x AS bx, b.bbox_y AS by_,
+                b.bbox_w AS bw, b.bbox_h AS bh, b.theta AS tb
         FROM pair_queue pq
         JOIN annotations a ON a.annotation_uuid = pq.ann_a_uuid
         JOIN annotations b ON b.annotation_uuid = pq.ann_b_uuid
@@ -53,20 +57,31 @@ def match_local_command(
         typer.echo("nothing to do")
         return
 
-    # Dedup annotation paths (annotation UUID as identity; same UUID => same file)
-    path_by_uuid: dict[str, str] = {}
-    for r in rows:
-        path_by_uuid[r["ann_a_uuid"]] = r["pa"]
-        path_by_uuid[r["ann_b_uuid"]] = r["pb"]
+    def _bbox(x, y, w, h):
+        return [x, y, w, h] if None not in (x, y, w, h) else None
 
-    typer.echo(f"extracting features for {len(path_by_uuid)} unique annotations")
-    feats_by_path = lg.extract_features_batch(
-        list(path_by_uuid.values()), extractor=extractor,
+    # Dedup by annotation UUID. Each UUID gets one feature extraction, reused
+    # across every pair that annotation appears in. Features come from the
+    # bbox+theta chip, same coordinate frame the UI paints onto.
+    specs_by_uuid: dict[str, tuple] = {}
+    for r in rows:
+        specs_by_uuid.setdefault(r["ann_a_uuid"], (
+            r["ann_a_uuid"], r["pa"],
+            _bbox(r["ax"], r["ay"], r["aw"], r["ah"]), float(r["ta"] or 0.0),
+        ))
+        specs_by_uuid.setdefault(r["ann_b_uuid"], (
+            r["ann_b_uuid"], r["pb"],
+            _bbox(r["bx"], r["by_"], r["bw"], r["bh"]), float(r["tb"] or 0.0),
+        ))
+
+    typer.echo(f"extracting features for {len(specs_by_uuid)} unique annotations")
+    feats_by_uuid = lg.extract_features_batch(
+        list(specs_by_uuid.values()), extractor=extractor,
     )
 
     typer.echo(f"matching {len(rows)} pairs")
-    pair_paths = [(r["pa"], r["pb"]) for r in rows]
-    results = lg.match_pairs_batch(pair_paths, feats_by_path, extractor=extractor)
+    uuid_pairs = [(r["ann_a_uuid"], r["ann_b_uuid"]) for r in rows]
+    results = lg.match_pairs_batch(uuid_pairs, feats_by_uuid, extractor=extractor)
 
     with storage.transaction():
         for r, res in zip(rows, results):

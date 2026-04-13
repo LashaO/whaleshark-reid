@@ -59,3 +59,13 @@ def test_lookup_pair_paths(tmp_db_path: Path):
     qid = _seed_pair(s)
     paths = svc.lookup_pair_image_paths(s, qid)
     assert paths == ("/x/a.jpg", "/x/b.jpg")
+
+
+def test_lookup_pair_chip_specs(tmp_db_path: Path):
+    """Chip specs carry file_path + bbox xywh + theta so the matcher can extract
+    features on the same chip the /image endpoint renders."""
+    s = Storage(tmp_db_path); s.init_schema()
+    qid = _seed_pair(s)
+    spec_a, spec_b = svc.lookup_pair_chip_specs(s, qid)
+    assert spec_a == ("a", "/x/a.jpg", [0, 0, 10, 10], 0.0)
+    assert spec_b == ("b", "/x/b.jpg", [0, 0, 10, 10], 0.0)

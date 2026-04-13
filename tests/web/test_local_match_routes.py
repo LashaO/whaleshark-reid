@@ -10,7 +10,7 @@ from whaleshark_reid.core.match.lightglue import MatchResult
 def _install_fake(monkeypatch):
     """Replace get_matcher with a deterministic stub."""
     class FakeMatcher:
-        def match_pair(self, a, b):
+        def match_pair(self, a, b, **kw):
             return MatchResult(
                 extractor="aliked", n_matches=3, mean_score=0.8, median_score=0.8,
                 kpts_a=[[1, 2], [3, 4]], kpts_b=[[5, 6], [7, 8]],
@@ -60,7 +60,7 @@ def test_post_without_overwrite_is_idempotent(seeded_web_client: TestClient, mon
 
     call_count = {"n": 0}
     class CountingMatcher:
-        def match_pair(self, a, b):
+        def match_pair(self, a, b, **kw):
             call_count["n"] += 1
             return MatchResult(
                 extractor="aliked", n_matches=99, mean_score=0.1, median_score=0.1,
@@ -84,7 +84,7 @@ def test_post_with_overwrite_recomputes(seeded_web_client: TestClient, monkeypat
     seeded_web_client.post(f"/api/pairs/{qid}/local-match")
 
     class NewerMatcher:
-        def match_pair(self, a, b):
+        def match_pair(self, a, b, **kw):
             return MatchResult(
                 extractor="aliked", n_matches=42, mean_score=0.2, median_score=0.2,
                 kpts_a=[], kpts_b=[], matches=[],

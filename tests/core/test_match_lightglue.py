@@ -46,7 +46,7 @@ def test_match_pair_delegates_to_singleton(monkeypatch):
     calls = []
 
     class FakeMatcher:
-        def match_pair(self, a, b):
+        def match_pair(self, a, b, **kw):
             calls.append((a, b))
             return MatchResult(
                 extractor="aliked", n_matches=1, mean_score=0.9, median_score=0.9,
@@ -84,8 +84,8 @@ def test_get_matcher_caches_per_extractor(monkeypatch):
     assert build_calls == ["aliked", "superpoint"]
 
 
-def test_extract_features_batch_dedupes_by_path(monkeypatch):
-    """Passing repeated paths must only extract each unique path once."""
+def test_extract_features_batch_dedupes_by_key_bare_paths(monkeypatch):
+    """Bare-path input (backward-compat) dedupes by path."""
     from whaleshark_reid.core.match import lightglue as lg
     lg._MATCHER_CACHE.clear()
 
@@ -93,16 +93,43 @@ def test_extract_features_batch_dedupes_by_path(monkeypatch):
 
     class FakeMatcher:
         extractor_name = "aliked"
-        def _extract(self, path):
-            extract_calls.append(path)
-            return {"keypoints": [[1, 2]]}, 440, 440  # feats, w, h
+        def _extract(self, path, bbox=None, theta=0.0):
+            extract_calls.append((path, bbox, theta))
+            return {"keypoints": [[1, 2]]}, 440, 440
 
     monkeypatch.setattr(lg, "_build_matcher", lambda e: FakeMatcher())
     feats_by_path = lg.extract_features_batch(
         ["a.jpg", "b.jpg", "a.jpg", "b.jpg", "c.jpg"], extractor="aliked",
     )
     assert set(feats_by_path.keys()) == {"a.jpg", "b.jpg", "c.jpg"}
-    assert sorted(extract_calls) == ["a.jpg", "b.jpg", "c.jpg"]
+    assert [c[0] for c in extract_calls] == ["a.jpg", "b.jpg", "c.jpg"]
+    # No bbox/theta supplied → uses defaults (full image)
+    assert all(c[1] is None and c[2] == 0.0 for c in extract_calls)
+
+
+def test_extract_features_batch_chip_specs(monkeypatch):
+    """Chip-spec input: two annotations from the same file with different bboxes
+    each get their own extraction. Key is the caller-chosen annotation UUID."""
+    from whaleshark_reid.core.match import lightglue as lg
+    lg._MATCHER_CACHE.clear()
+
+    extract_calls = []
+
+    class FakeMatcher:
+        extractor_name = "aliked"
+        def _extract(self, path, bbox=None, theta=0.0):
+            extract_calls.append((path, bbox, theta))
+            return {"keypoints": [[1, 2]]}, 440, 440
+
+    monkeypatch.setattr(lg, "_build_matcher", lambda e: FakeMatcher())
+    specs = [
+        ("uuid-a", "shared.jpg", [0, 0, 100, 100], 0.0),
+        ("uuid-b", "shared.jpg", [100, 0, 100, 100], 0.0),
+        ("uuid-a", "shared.jpg", [0, 0, 100, 100], 0.0),  # duplicate key — skipped
+    ]
+    feats = lg.extract_features_batch(specs, extractor="aliked")
+    assert set(feats.keys()) == {"uuid-a", "uuid-b"}
+    assert len(extract_calls) == 2  # dedup by key, not by path
 
 
 def test_match_pairs_batch_uses_cached_feats(monkeypatch):

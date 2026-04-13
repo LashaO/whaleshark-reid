@@ -23,7 +23,7 @@ def _seed(s: Storage):
 def _fake_matcher(monkeypatch):
     class FM:
         extractor_name = "aliked"
-        def _extract(self, path):
+        def _extract(self, path, bbox=None, theta=0.0):
             return {"keypoints": [[1, 2]]}, 440, 440
         def _match_prebuilt(self, fa, fb, sa, sb):
             return MatchResult(
