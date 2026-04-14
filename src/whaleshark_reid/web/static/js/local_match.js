@@ -37,6 +37,8 @@
         const kptsCk = ctrl.querySelector(".lm-kpts");
         const showHidden = ctrl.querySelector(".lm-show-hidden");
         const hiddenCount = ctrl.querySelector(".lm-hidden-count");
+        const hideAll = ctrl.querySelector(".lm-hide-all");
+        const hideBelow = ctrl.querySelector(".lm-hide-below");
 
         const state = { result: null, hidden: new Set() };
 
@@ -117,6 +119,19 @@
         });
 
         showHidden.addEventListener("click", () => { state.hidden.clear(); render(); });
+        hideAll.addEventListener("click", () => {
+            if (!state.result) return;
+            state.result.matches.forEach((_m, i) => state.hidden.add(i));
+            render();
+        });
+        hideBelow.addEventListener("click", () => {
+            if (!state.result) return;
+            const thr = parseFloat(conf.value);
+            state.result.matches.forEach((m, i) => {
+                if (m[2] < thr) state.hidden.add(i);
+            });
+            render();
+        });
         conf.addEventListener("input", () => { confVal.textContent = parseFloat(conf.value).toFixed(2); render(); });
         linesCk.addEventListener("change", render);
         kptsCk.addEventListener("change", render);
@@ -131,6 +146,8 @@
             setStats(r);
             runBtn.style.display = "none";
             rerunBtn.style.display = "";
+            hideAll.style.display = "";
+            hideBelow.style.display = "";
             render();
         }
 
