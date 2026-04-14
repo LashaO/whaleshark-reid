@@ -35,9 +35,7 @@
         const confVal = ctrl.querySelector(".lm-conf-val");
         const linesCk = ctrl.querySelector(".lm-lines");
         const kptsCk = ctrl.querySelector(".lm-kpts");
-        const showHidden = ctrl.querySelector(".lm-show-hidden");
-        const hiddenCount = ctrl.querySelector(".lm-hidden-count");
-        const hideAll = ctrl.querySelector(".lm-hide-all");
+        const toggleHidden = ctrl.querySelector(".lm-toggle-hidden");
         const hideBelow = ctrl.querySelector(".lm-hide-below");
 
         const state = { result: null, hidden: new Set() };
@@ -99,8 +97,13 @@
                 });
             }
             overlay.innerHTML = html;
-            hiddenCount.textContent = state.hidden.size;
-            showHidden.style.display = state.hidden.size ? "" : "none";
+            // Toggle button label reflects current state: empty → "Hide all",
+            // something hidden → "Show all (N)".
+            if (state.hidden.size) {
+                toggleHidden.textContent = `Show all (${state.hidden.size})`;
+            } else {
+                toggleHidden.textContent = "Hide all";
+            }
         }
 
         overlay.addEventListener("click", (e) => {
@@ -118,10 +121,13 @@
             render();
         });
 
-        showHidden.addEventListener("click", () => { state.hidden.clear(); render(); });
-        hideAll.addEventListener("click", () => {
+        toggleHidden.addEventListener("click", () => {
             if (!state.result) return;
-            state.result.matches.forEach((_m, i) => state.hidden.add(i));
+            if (state.hidden.size) {
+                state.hidden.clear();
+            } else {
+                state.result.matches.forEach((_m, i) => state.hidden.add(i));
+            }
             render();
         });
         hideBelow.addEventListener("click", () => {
@@ -146,7 +152,7 @@
             setStats(r);
             runBtn.style.display = "none";
             rerunBtn.style.display = "";
-            hideAll.style.display = "";
+            toggleHidden.style.display = "";
             hideBelow.style.display = "";
             render();
         }

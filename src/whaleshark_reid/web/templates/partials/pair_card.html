@@ -103,9 +103,8 @@
         <span class="lm-conf-val">0.50</span>
         <label><input type="checkbox" class="lm-lines" checked> lines</label>
         <label><input type="checkbox" class="lm-kpts" checked> keypoints</label>
-        <button type="button" class="btn lm-hide-all" style="display:none;" title="Hide every currently-visible line">Hide all</button>
+        <button type="button" class="btn lm-toggle-hidden" style="display:none;" title="Hide all lines / show them again">Hide all</button>
         <button type="button" class="btn lm-hide-below" style="display:none;" title="Hide all lines below the current confidence slider">Hide &lt; slider</button>
-        <button type="button" class="btn lm-show-hidden" style="display:none;">Show hidden (<span class="lm-hidden-count">0</span>)</button>
         <button type="button" class="btn lm-rerun" style="display:none;">re-run</button>
         <span class="lm-stats" style="color:var(--text-muted); margin-left:auto;"></span>
     </div>
@@ -256,5 +255,5 @@
     </details>
     {% endif %}
 </div>
-<script src="/static/js/local_match.js?v=3"></script>
+<script src="/static/js/local_match.js?v=4"></script>
 <script src="/static/js/pairx.js?v=1"></script>
